@@ -65,25 +65,31 @@ app.post("/anchor", async (req, res) => {
   }
 });
 
-// Read latest on-chain hash (and metadata)
 app.get("/verify", async (req, res) => {
   try {
     const { docId } = req.query;
     if (!docId) return res.status(400).json({ error: "docId required" });
-    const [v, index] = await anchor.latest(docKeyOf(docId));
+
+    const key = docKeyOf(docId);
+    const n = await anchor.count(key);
+    if (n === 0n) return res.json({ found: false });
+
+    const v = await anchor.get(key, n - 1n); // latest = last index
     return res.json({
       found: true,
       onChainHash: v.hash.slice(2),
-      index,
+      index: Number(n - 1n),
       author: v.author,
       blockTimestamp: Number(v.ts),
       reason: v.reason,
-      revoked: v.revoked,
+      revoked: v.revoked
     });
-  } catch {
-    return res.status(404).json({ found: false });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e.message });
   }
 });
+
 
 // List history (all versions)
 app.get("/history", async (req, res) => {
