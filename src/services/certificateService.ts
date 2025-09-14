@@ -33,7 +33,7 @@ export class CertificateService {
         fileUrl,
         hash: hashHex,
         signature: signature.toString('base64'),
-        meta: params.meta
+        meta: JSON.stringify(params.meta)
       }
     });
 
@@ -51,11 +51,10 @@ export class CertificateService {
         role: user.role,
         refType: 'Certificate',
         refId: docId,
-        details: { fileUrl }
+        details: JSON.stringify({ fileUrl })
       }
     });
 
     return cert;
   }
 }
-

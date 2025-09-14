@@ -46,7 +46,7 @@ export class VerificationService {
 
     const status = reasons.length === 0 ? 'PASS' : 'FAIL';
     await this.prisma.verificationResult.create({
-      data: { docId: cert.id, status: status as any, reasons: JSON.stringify(reasons), verifierUserId: user.id }
+      data: { docId: cert.id, status: status, reasons: JSON.stringify(reasons), verifierUserId: user.id }
     });
     await this.prisma.auditLog.create({
       data: {
@@ -55,7 +55,7 @@ export class VerificationService {
         role: user.role,
         refType: 'Certificate',
         refId: cert.id,
-        details: { status, reasons }
+        details: JSON.stringify({ status, reasons })
       }
     });
 
@@ -72,4 +72,3 @@ async function keysOrDb(keys: KeyRegistry, prisma: PrismaClient, issuerId: strin
     return issuer.publicKeyPem;
   }
 }
-

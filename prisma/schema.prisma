@@ -7,26 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN
-  VERIFIER
-}
-
-enum VerificationStatus {
-  PASS
-  FAIL
-}
-
-enum ActionType {
-  UPLOAD
-  VERIFY
-}
-
 model User {
   id             String   @id @default(cuid())
   email          String   @unique
   passwordHash   String
-  role           Role
+  role           String   // 'ADMIN' | 'VERIFIER'
   issuerId       String?
   verifierOrgId  String?
   issuer         Issuer?  @relation(fields: [issuerId], references: [id])
@@ -61,20 +46,20 @@ model Certificate {
   hash      String
   signature String
   issuedAt  DateTime @default(now())
-  meta      Json
+  meta      String   // JSON string
 }
 
 model ChainRecord {
   id        String   @id @default(cuid())
   docId     String   @unique
-  data      Json
+  data      String   // JSON string
   recordedAt DateTime @default(now())
 }
 
 model VerificationResult {
   id        String   @id @default(cuid())
   docId     String
-  status    VerificationStatus
+  status    String   // 'PASS' | 'FAIL'
   reasons   String   // JSON stringified array of reasons
   checkedAt DateTime @default(now())
   verifierUserId String?
@@ -83,13 +68,12 @@ model VerificationResult {
 
 model AuditLog {
   id        String   @id @default(cuid())
-  action    ActionType
+  action    String   // 'UPLOAD' | 'VERIFY'
   userId    String
-  role      Role
+  role      String   // 'ADMIN' | 'VERIFIER'
   refType   String
   refId     String
-  details   Json
+  details   String   // JSON string
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
 }
-

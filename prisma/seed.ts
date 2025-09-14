@@ -1,4 +1,4 @@
-import { PrismaClient, Role } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { readFileSync, mkdirSync, writeFileSync } from 'fs';
 import { existsSync } from 'fs';
 import path from 'path';
@@ -51,7 +51,7 @@ async function main() {
     data: {
       email: 'admin@example.com',
       passwordHash: hash,
-      role: Role.ADMIN,
+      role: 'ADMIN',
       issuerId: issuer.id
     }
   });
@@ -60,7 +60,7 @@ async function main() {
     data: {
       email: 'verifier@example.com',
       passwordHash: hash,
-      role: Role.VERIFIER,
+      role: 'VERIFIER',
       verifierOrgId: verifierOrg.id
     }
   });
@@ -84,14 +84,14 @@ async function main() {
       fileUrl,
       hash: fileHashHex,
       signature: signature.toString('base64'),
-      meta: { kind: 'transcript', studentRef: 'sample' }
+      meta: JSON.stringify({ kind: 'transcript', studentRef: 'sample' })
     }
   });
 
   await prisma.chainRecord.create({
     data: {
       docId,
-      data: { docId, issuerId: issuer.id, hash: fileHashHex, signature: signature.toString('base64') }
+      data: JSON.stringify({ docId, issuerId: issuer.id, hash: fileHashHex, signature: signature.toString('base64') })
     }
   });
 
@@ -106,4 +106,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-
