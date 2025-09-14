@@ -20,7 +20,10 @@ const anchorAbi = [
 
 const registryAbi = [
   "function isIssuer(address) view returns (bool)",
-  "function nameOf(address) view returns (string)"
+  "function nameOf(address) view returns (string)",
+  // admin methods (must be called by registry owner/admin)
+  "function addIssuer(address who, string name) external",
+  "function removeIssuer(address who) external"
 ];
 
 const anchor = new ethers.Contract(process.env.ANCHOR_CONTRACT, anchorAbi, wallet);
@@ -139,6 +142,9 @@ app.post("/issuer/remove", async (req, res) => {
     return res.status(500).json({ error: e.message });
   }
 });
+
+// basic health
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 app.get("/issuer/is-active", async (req, res) => {
   try {

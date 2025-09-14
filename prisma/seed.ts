@@ -32,13 +32,16 @@ async function main() {
   const { publicKeyPem, privateKeyPem } = generateEd25519();
 
   // Upsert Issuer and VerifierOrg
-  const issuer = await prisma.issuer.create({
-    data: {
-      name: 'Demo College',
-      publicKeyPem,
-      privateKeyPem
-    }
-  });
+  let issuer = await prisma.issuer.findFirst();
+  if (!issuer) {
+    issuer = await prisma.issuer.create({
+      data: {
+        name: 'Demo College',
+        publicKeyPem,
+        privateKeyPem
+      }
+    });
+  }
 
   const verifierOrg = await prisma.verifierOrg.create({
     data: { name: 'Demo Verifier Inc.' }
@@ -47,22 +50,16 @@ async function main() {
   // Users
   const hash = bcrypt.hashSync('Pass@123', 10);
 
-  await prisma.user.create({
-    data: {
-      email: 'admin@example.com',
-      passwordHash: hash,
-      role: 'ADMIN',
-      issuerId: issuer.id
-    }
+  await prisma.user.upsert({
+    where: { email: 'admin@example.com' },
+    update: { passwordHash: hash, role: 'ADMIN', issuerId: issuer.id },
+    create: { email: 'admin@example.com', passwordHash: hash, role: 'ADMIN', issuerId: issuer.id }
   });
 
-  await prisma.user.create({
-    data: {
-      email: 'verifier@example.com',
-      passwordHash: hash,
-      role: 'VERIFIER',
-      verifierOrgId: verifierOrg.id
-    }
+  await prisma.user.upsert({
+    where: { email: 'verifier@example.com' },
+    update: { passwordHash: hash, role: 'VERIFIER', verifierOrgId: verifierOrg.id },
+    create: { email: 'verifier@example.com', passwordHash: hash, role: 'VERIFIER', verifierOrgId: verifierOrg.id }
   });
 
   // Seed a demo certificate from demo/transcript.pdf
