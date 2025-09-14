@@ -2,14 +2,14 @@ import { FastifyInstance } from 'fastify';
 import { requireRole } from '../infra/auth/auth';
 import { VerificationService } from '../services/verificationService';
 import { prisma } from '../infra/db/prismaClient';
-import { createMockCloudStorage } from '../adapters/cloudStorageAdapter';
+import { getCloudStorageAdapter } from '../adapters/cloudStorageAdapter';
 import { createMockBlockchainAdapter } from '../adapters/blockchainAdapter';
 import { createKeyRegistry } from '../adapters/keyRegistry';
 import { VerifySchema } from '../utils/validation';
 import { AppError, ErrorCodes } from '../utils/errors';
 
 export async function registerVerificationRoutes(app: FastifyInstance) {
-  const storage = createMockCloudStorage();
+  const storage = getCloudStorageAdapter();
   const chain = createMockBlockchainAdapter(prisma);
   const keys = createKeyRegistry(prisma);
   const service = new VerificationService(prisma, storage, chain, keys);
@@ -27,4 +27,3 @@ export async function registerVerificationRoutes(app: FastifyInstance) {
     return result;
   });
 }
-

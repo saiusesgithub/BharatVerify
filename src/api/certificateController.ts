@@ -2,13 +2,13 @@ import { FastifyInstance } from 'fastify';
 import { requireRole } from '../infra/auth/auth';
 import { CertificateService } from '../services/certificateService';
 import { prisma } from '../infra/db/prismaClient';
-import { createMockCloudStorage } from '../adapters/cloudStorageAdapter';
+import { getCloudStorageAdapter } from '../adapters/cloudStorageAdapter';
 import { createMockBlockchainAdapter } from '../adapters/blockchainAdapter';
 import { UploadMetaSchema } from '../utils/validation';
 import { AppError, ErrorCodes } from '../utils/errors';
 
 export async function registerCertificateRoutes(app: FastifyInstance) {
-  const storage = createMockCloudStorage();
+  const storage = getCloudStorageAdapter();
   const chain = createMockBlockchainAdapter(prisma);
   const service = new CertificateService(prisma, storage, chain);
 
@@ -46,4 +46,3 @@ export async function registerCertificateRoutes(app: FastifyInstance) {
     return { id: cert.id, hash: cert.hash, signature: cert.signature };
   });
 }
-

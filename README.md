@@ -39,7 +39,8 @@ Acceptance Tests (mocked adapters)
 Adapter Behavior (Mocks)
 
 - BlockchainAdapter: stores a deterministic chain record in DB table `ChainRecord` and logs payloads.
-- CloudStorageAdapter: stores files under `data/files/` and returns a `local://files/<name>` URL.
+- CloudStorageAdapter (mock): stores files under `data/files/` and returns a `local://files/<name>` URL.
+- CloudStorageAdapter (Cloudflare R2): when `USE_MOCK_ADAPTERS=false`, uploads to R2 via S3 API and returns `r2://<bucket>/<key>`.
 - KeyRegistry: resolves issuer public key from DB; seeded issuer has an Ed25519 keypair.
 
 Scripts
@@ -64,6 +65,17 @@ Config
   - `USE_MOCK_ADAPTERS=true`
   - `STORAGE_DIR=/app/data/files`
   - `DATABASE_URL=file:./dev.db`
+  - For Cloudflare R2 (set these and set `USE_MOCK_ADAPTERS=false`):
+    - `R2_ACCOUNT_ID=xxxxxxxxxxxxxxxxxxxx`
+    - `R2_ACCESS_KEY_ID=AKIA...`
+    - `R2_SECRET_ACCESS_KEY=...`
+    - `R2_BUCKET=your-bucket-name`
+
+Cloudflare R2 Notes
+
+- R2 is S3-compatible. This service uses the endpoint `https://<R2_ACCOUNT_ID>.r2.cloudflarestorage.com` with path-style addressing and region `auto`.
+- The returned `fileUrl` is `r2://<bucket>/<key>` for internal reference; downloads for verification are performed server-side using the R2 API.
+- If your bucket is public or fronted by a CDN, you may also map `r2://` to a public HTTPS URL externally; not required for backend verification.
 
 Project Structure
 

@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import swagger from '@fastify/swagger';
 import swaggerUI from '@fastify/swagger-ui';
 import multipart from '@fastify/multipart';
+import cors from '@fastify/cors';
 import { authPlugin } from '../auth/auth';
 import { registerAuthRoutes } from '../../api/authController';
 import { registerCertificateRoutes } from '../../api/certificateController';
@@ -18,6 +19,12 @@ export function buildServer() {
     }
   });
   app.register(swaggerUI, { routePrefix: '/docs' });
+
+  // CORS for frontend (dev default allows all origins)
+  app.register(cors, {
+    origin: (origin, cb) => cb(null, true),
+    credentials: true
+  });
 
   app.register(multipart);
   app.register(authPlugin);
@@ -40,4 +47,3 @@ export function buildServer() {
 
   return app;
 }
-
