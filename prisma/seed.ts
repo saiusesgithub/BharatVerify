@@ -84,7 +84,19 @@ async function main() {
       fileUrl,
       hash: fileHashHex,
       signature: signature.toString('base64'),
-      meta: JSON.stringify({ kind: 'transcript', studentRef: 'sample' })
+      meta: JSON.stringify({ kind: 'transcript', studentRef: 'sample' }),
+      title: 'Transcript',
+      issuedAtUnix: Math.floor(Date.now()/1000),
+      sha256Hex: fileHashHex,
+      issuerAddress: null,
+      signatureHex: null,
+      status: 'active',
+      reason: 'initial-issue',
+      r2Key: fileUrl,
+      txHash: null,
+      blockNumber: null,
+      chain: null,
+      explorerUrl: null
     }
   });
 

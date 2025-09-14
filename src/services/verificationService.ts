@@ -2,7 +2,8 @@ import { PrismaClient } from '@prisma/client';
 import { CloudStorageAdapter } from '../adapters/cloudStorageAdapter';
 import { BlockchainAdapter } from '../adapters/blockchainAdapter';
 import { KeyRegistry } from '../adapters/keyRegistry';
-import { sha256, verifyEd25519 } from '../utils/crypto';
+import { chainAdapter } from './chainAdapter';
+import { sha256Bytes } from './crypto';
 
 export class VerificationService {
   constructor(
@@ -12,7 +13,7 @@ export class VerificationService {
     private keys: KeyRegistry
   ) {}
 
-  async verify(params: { verifierUserId: string; docId: string }) {
+  async verify(params: { verifierUserId: string; docId: string; fileBuffer?: Buffer; sha256Hex?: string }) {
     const user = await this.prisma.user.findUnique({ where: { id: params.verifierUserId } });
     if (!user) throw new Error('User not found');
 
@@ -25,28 +26,48 @@ export class VerificationService {
     }
 
     const reasons: string[] = [];
-    // Download and hash
-    const bytes = await this.storage.download(cert.fileUrl);
-    const hashHex = sha256(bytes);
-    if (hashHex !== cert.hash) reasons.push('HASH_MISMATCH');
-
-    // Verify signature using issuer public key
-    const pub = await keysOrDb(this.keys, this.prisma, cert.issuerId);
-    const sigOk = verifyEd25519(pub, Buffer.from(cert.hash, 'hex'), Buffer.from(cert.signature, 'base64'));
-    if (!sigOk) reasons.push('SIG_INVALID');
-
-    // Chain record
-    const chainRec = await this.chain.getCertificateRecord(cert.id);
-    if (!chainRec) {
-      reasons.push('CHAIN_MISS');
-    } else {
-      if (chainRec.hash !== cert.hash) reasons.push('HASH_MISMATCH');
-      if (chainRec.signature !== cert.signature) reasons.push('SIG_INVALID');
+    // Compute or use provided sha256
+    let computed = params.sha256Hex;
+    if (params.fileBuffer) computed = sha256Bytes(params.fileBuffer);
+    if (!computed) {
+      const bytes = await this.storage.download(cert.fileUrl);
+      computed = sha256Bytes(bytes);
     }
 
-    const status = reasons.length === 0 ? 'PASS' : 'FAIL';
+    if ((computed || '').toLowerCase() !== (cert.sha256Hex || cert.hash).toLowerCase()) reasons.push('HASH_MISMATCH');
+
+    // Chain record
+    const on = await chainAdapter.verify(cert.id);
+    if (!on.found) reasons.push('CHAIN_MISS');
+    else if ((on.onChainHash || '').toLowerCase() !== (computed || '').toLowerCase()) reasons.push('HASH_MISMATCH');
+
+    // Signature check
+    let issuerVerified = false;
+    if (cert.signatureHex && cert.issuerAddress) {
+      try {
+        const sig = await chainAdapter.verifySignature({ docId: cert.id, sha256Hex: computed!, issuedAtUnix: cert.issuedAtUnix || Math.floor(new Date(cert.issuedAt).getTime()/1000), signatureHex: cert.signatureHex, expectedIssuer: cert.issuerAddress });
+        issuerVerified = sig.matchesExpected && sig.issuerActive;
+        if (!issuerVerified) reasons.push('SIG_INVALID');
+      } catch {
+        reasons.push('SIG_INVALID');
+      }
+    }
+
+    const status = reasons.length === 0 ? 'PASS' : (cert.status === 'revoked' ? 'FAIL' : 'FAIL');
     await this.prisma.verificationResult.create({
       data: { docId: cert.id, status: status, reasons: JSON.stringify(reasons), verifierUserId: user.id }
+    });
+    await this.prisma.verificationEvent.create({
+      data: {
+        certificateId: cert.id,
+        by: user.email,
+        result: status.toLowerCase(),
+        hashMatch: !reasons.includes('HASH_MISMATCH'),
+        issuerVerified,
+        mlSummary: null,
+        details: JSON.stringify({ reasons, on }),
+        atUnix: Math.floor(Date.now()/1000)
+      }
     });
     await this.prisma.auditLog.create({
       data: {

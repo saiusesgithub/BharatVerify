@@ -1,8 +1,10 @@
 import { PrismaClient } from '@prisma/client';
 import { CloudStorageAdapter } from '../adapters/cloudStorageAdapter';
 import { BlockchainAdapter } from '../adapters/blockchainAdapter';
-import { sha256, signEd25519 } from '../utils/crypto';
 import crypto from 'crypto';
+import { sha256Bytes, buildSignatureMessage, signMessageHash } from './crypto';
+import { chainAdapter } from './chainAdapter';
+import { config } from '../config/secrets';
 
 export class CertificateService {
   constructor(
@@ -16,33 +18,52 @@ export class CertificateService {
     meta: any;
     fileBuffer: Buffer;
     originalName: string;
+    title?: string;
+    docId?: string;
+    reason?: string;
   }) {
     const user = await this.prisma.user.findUnique({ where: { id: params.issuerUserId }, include: { issuer: true } });
     if (!user || !user.issuer) throw new Error('Issuer not found for user');
 
-    const hashHex = sha256(params.fileBuffer);
-    const signature = signEd25519(user.issuer.privateKeyPem, Buffer.from(hashHex, 'hex'));
-
+    // Note: QR/metadata stamping is out-of-scope here; hash the provided PDF bytes.
+    const issuedAtUnix = Math.floor(Date.now() / 1000);
+    const sha256Hex = sha256Bytes(params.fileBuffer);
     const fileUrl = await this.storage.upload(params.fileBuffer, params.originalName);
-    const docId = crypto.randomUUID();
+    const docId = params.docId || crypto.randomUUID();
 
     const cert = await this.prisma.certificate.create({
       data: {
         id: docId,
         issuerId: user.issuer.id,
         fileUrl,
-        hash: hashHex,
-        signature: signature.toString('base64'),
-        meta: JSON.stringify(params.meta)
+        hash: sha256Hex,
+        signature: '',
+        meta: JSON.stringify(params.meta || {}),
+        title: params.title || null,
+        issuedAtUnix,
+        sha256Hex,
+        issuerAddress: config.issuerAddress || null,
+        signatureHex: null,
+        status: 'active',
+        reason: params.reason || 'initial-issue',
+        r2Key: fileUrl,
+        txHash: null,
+        blockNumber: null,
+        chain: null,
+        explorerUrl: null
       }
     });
 
-    await this.chain.recordCertificate({
-      docId,
-      issuerId: user.issuer.id,
-      hash: hashHex,
-      signature: signature.toString('base64')
-    });
+    // Optional ECDSA signing
+    if (config.issuerPrivKeyHex) {
+      const msgHash = buildSignatureMessage(docId, sha256Hex, issuedAtUnix);
+      const signatureHex = signMessageHash(msgHash, config.issuerPrivKeyHex);
+      await this.prisma.certificate.update({ where: { id: docId }, data: { signatureHex } });
+    }
+
+    // Anchor on chain via adapter
+    const tx = await chainAdapter.anchor({ docId, sha256Hex, reason: params.reason || 'initial-issue' });
+    await this.prisma.certificate.update({ where: { id: docId }, data: { txHash: tx.txHash, blockNumber: tx.blockNumber, chain: tx.chain, explorerUrl: tx.explorerUrl } });
 
     await this.prisma.auditLog.create({
       data: {
@@ -51,10 +72,10 @@ export class CertificateService {
         role: user.role,
         refType: 'Certificate',
         refId: docId,
-        details: JSON.stringify({ fileUrl })
+        details: JSON.stringify({ fileUrl, sha256Hex })
       }
     });
 
-    return cert;
+    return await this.prisma.certificate.findUnique({ where: { id: docId } });
   }
 }

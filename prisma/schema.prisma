@@ -39,14 +39,31 @@ model VerifierOrg {
 }
 
 model Certificate {
-  id        String   @id // docId
-  issuerId  String
-  issuer    Issuer   @relation(fields: [issuerId], references: [id])
-  fileUrl   String
-  hash      String
-  signature String
-  issuedAt  DateTime @default(now())
-  meta      String   // JSON string
+  id             String   @id // docId
+  issuerId       String
+  issuer         Issuer   @relation(fields: [issuerId], references: [id])
+  // legacy fields (kept for compatibility)
+  fileUrl        String
+  hash           String
+  signature      String
+  issuedAt       DateTime @default(now())
+  meta           String   // JSON string
+  // new fields per blockchain integration
+  ownerId        String?
+  title          String?
+  issuedAtUnix   Int      @default(0)
+  sha256Hex      String   @default("")
+  issuerAddress  String?
+  signatureHex   String?
+  status         String   @default("active")
+  reason         String?
+  r2Key          String   @default("")
+  txHash         String?
+  blockNumber    Int?
+  chain          String?
+  explorerUrl    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model ChainRecord {
@@ -64,6 +81,20 @@ model VerificationResult {
   checkedAt DateTime @default(now())
   verifierUserId String?
   verifier  User?    @relation("VerificationUser", fields: [verifierUserId], references: [id])
+}
+
+model VerificationEvent {
+  id              String   @id @default(cuid())
+  certificateId   String
+  certificate     Certificate @relation(fields: [certificateId], references: [id])
+  by              String
+  result          String   // 'pass' | 'fail' | 'revoked'
+  hashMatch       Boolean
+  issuerVerified  Boolean
+  mlSummary       String?  // JSON string
+  details         String?  // JSON string
+  atUnix          Int
+  createdAt       DateTime @default(now())
 }
 
 model AuditLog {
