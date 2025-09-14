@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 import { readFileSync, mkdirSync, writeFileSync } from 'fs';
 import { existsSync } from 'fs';
 import path from 'path';
@@ -44,7 +45,6 @@ async function main() {
   });
 
   // Users
-  const bcrypt = await import('bcryptjs');
   const hash = bcrypt.hashSync('Pass@123', 10);
 
   await prisma.user.create({

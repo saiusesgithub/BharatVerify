@@ -3,6 +3,7 @@ import fastifyJwt from '@fastify/jwt';
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { prisma } from '../db/prismaClient';
 import { AppError, ErrorCodes } from '../../utils/errors';
+import bcrypt from 'bcryptjs';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -42,7 +43,6 @@ export function requireRole(roles: Array<'ADMIN' | 'VERIFIER'>) {
 export async function verifyCredentials(email: string, password: string) {
   const user = await prisma.user.findUnique({ where: { email } });
   if (!user) return null;
-  const bcrypt = await import('bcryptjs');
   const ok = bcrypt.compareSync(password, user.passwordHash);
   if (!ok) return null;
   return user;
