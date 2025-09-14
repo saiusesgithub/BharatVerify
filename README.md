@@ -148,3 +148,49 @@ Postman
 Notes
 
 - This MVP signs and verifies the SHA-256 hash of the file bytes using Ed25519 keys. Keys are demo-only and stored in DB (do not do this in production). Adapters are cleanly abstracted for future real implementations.
+
+Dev Handy Commands (PowerShell)
+
+Login and capture token
+
+```
+$resp = curl.exe -s -X POST http://localhost:3000/api/auth/login -H "Content-Type: application/json" -d '{ "email":"admin@example.com","password":"Pass@123" }'
+$token = ($resp | ConvertFrom-Json).token
+```
+
+Find recent uploads and a docId
+
+```
+$aud = curl.exe -s -H "Authorization: Bearer $token" "http://localhost:3000/api/audit?limit=10"
+($aud | ConvertFrom-Json).items | Select-Object createdAt,action,refId
+$docId = ( ($aud | ConvertFrom-Json).items | Where-Object {$_.action -eq "UPLOAD"} | Select-Object -First 1 ).refId
+```
+
+Get certificate details
+
+```
+$obj = (curl.exe -s -H "Authorization: Bearer $token" "http://localhost:3000/api/certs/$docId" | ConvertFrom-Json)
+$obj.signatureHex; $obj.issuerAddress; $obj.sha256Hex
+```
+
+Chain-adapter health and queries
+
+```
+curl.exe -s http://localhost:8088/health
+curl.exe -s "http://localhost:8088/verify?docId=$docId"
+```
+
+Mark issuer active in registry (on-chain)
+
+```
+$body = @{ address = "0xbBFA201f773090C8532c6c00181b8b0915D91cFD"; name = "Demo Issuer" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "http://localhost:8088/issuer/add" -ContentType "application/json" -Body $body
+curl.exe -s "http://localhost:8088/issuer/is-active?address=0xbBFA201f773090C8532c6c00181b8b0915D91cFD"
+```
+
+Optional: verify signature via adapter
+
+```
+$vs = @{ docId=$docId; sha256Hex=$obj.sha256Hex; issuedAtUnix=$obj.issuedAt; signatureHex=$obj.signatureHex; expectedIssuer=$obj.issuerAddress } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri "http://localhost:8088/verify-signature" -ContentType "application/json" -Body $vs
+```
