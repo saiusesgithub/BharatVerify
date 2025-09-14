@@ -17,4 +17,4 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    command: sh -lc "npx prisma migrate deploy && npx tsx prisma/seed.ts && node dist/index.js"
+    command: sh -lc "npx prisma db push && npx tsx prisma/seed.ts && npm run test && node dist/index.js"

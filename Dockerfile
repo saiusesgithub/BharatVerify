@@ -1,15 +1,14 @@
 # syntax=docker/dockerfile:1
 FROM node:20-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci --no-audit --no-fund
+COPY package.json ./
+RUN npm install --no-audit --no-fund
 
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npx prisma generate
-RUN npm run build
+RUN npx prisma generate && npm run build
 
 FROM node:20-alpine AS runner
 WORKDIR /app
@@ -22,5 +21,4 @@ COPY package.json .
 COPY .env .
 RUN mkdir -p /app/data/files
 EXPOSE 3000
-CMD ["sh", "-lc", "npx prisma migrate deploy && node dist/index.js"]
-
+CMD ["sh", "-lc", "npx prisma db push && node dist/index.js"]

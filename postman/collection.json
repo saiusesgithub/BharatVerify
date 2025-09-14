@@ -14,6 +14,23 @@
       }
     },
     {
+      "name": "Upload (ADMIN)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}"}
+        ],
+        "url": {"raw": "http://localhost:3000/api/admin/certificates/upload", "protocol":"http","host":["localhost"],"port":"3000","path":["api","admin","certificates","upload"]},
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"meta","value":"{\"kind\":\"transcript\",\"studentRef\":\"sample\"}","type":"text"},
+            {"key":"file","type":"file","src":"demo/transcript.pdf"}
+          ]
+        }
+      }
+    },
+    {
       "name": "Login VERIFIER",
       "request": {
         "method": "POST",
@@ -36,4 +53,3 @@
     }
   ]
 }
-

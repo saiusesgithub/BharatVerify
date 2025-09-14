@@ -10,7 +10,7 @@ Overview
 Quick Start
 
 - Prereqs: Docker + Docker Compose.
-- Start: `docker compose up --build` (first run builds, migrates, seeds, runs tests, then starts server).
+- Start: `docker compose up --build` (builds, applies schema, seeds, runs tests, then starts server).
 - Stop: `docker compose down -v` (removes containers and volumes).
 - Health: GET http://localhost:3000/health
 - OpenAPI: http://localhost:3000/docs
@@ -48,13 +48,13 @@ Scripts
 - `npm run build`: TypeScript build.
 - `npm run start`: start compiled server.
 - `npm run test`: unit + integration tests (vitest).
-- `npm run migrate`: apply migrations.
+- `npm run migrate`: apply schema (Prisma db push for dev).
 - `npm run seed`: seed demo data.
 - `npm run ci:local`: format, lint, build, prisma generate, migrate, test, start.
 
 Docker
 
-- `docker compose up --build` runs install, build, prisma generate, migrate, seed, tests, and then starts server at 3000.
+- `docker compose up --build` runs install, build, prisma generate, schema push, seed, tests, and then starts server at 3000.
 
 Config
 
@@ -136,4 +136,3 @@ Postman
 Notes
 
 - This MVP signs and verifies the SHA-256 hash of the file bytes using Ed25519 keys. Keys are demo-only and stored in DB (do not do this in production). Adapters are cleanly abstracted for future real implementations.
-

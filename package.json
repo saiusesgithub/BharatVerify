@@ -10,10 +10,10 @@
     "format": "prettier --write \"**/*.{ts,js,json,md}\"",
     "lint": "eslint \"src/**/*.ts\"",
     "test": "vitest run --reporter=verbose",
-    "migrate": "prisma migrate deploy",
+    "migrate": "prisma db push",
     "seed": "tsx prisma/seed.ts",
     "prisma:generate": "prisma generate",
-    "ci:local": "npm run format && npm run lint && npm run build && npm run prisma:generate && npm run migrate && npm run test && npm run start"
+    "ci:local": "npm run format && npm run lint && npm run build && npm run prisma:generate && npm run migrate && npm run seed && npm run test && npm run start"
   },
   "dependencies": {
     "@fastify/jwt": "^8.0.1",
@@ -41,4 +41,3 @@
     "vitest": "^2.0.5"
   }
 }
-
