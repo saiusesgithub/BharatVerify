@@ -1,0 +1,20 @@
+version: '3.9'
+services:
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - JWT_SECRET=dev_jwt_secret_change_me
+      - USE_MOCK_ADAPTERS=true
+      - STORAGE_DIR=/app/data/files
+      - DATABASE_URL=file:./dev.db
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    command: sh -lc "npx prisma migrate deploy && npx tsx prisma/seed.ts && node dist/index.js"

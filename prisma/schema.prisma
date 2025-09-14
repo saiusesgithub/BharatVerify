@@ -1,0 +1,95 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  VERIFIER
+}
+
+enum VerificationStatus {
+  PASS
+  FAIL
+}
+
+enum ActionType {
+  UPLOAD
+  VERIFY
+}
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String
+  role           Role
+  issuerId       String?
+  verifierOrgId  String?
+  issuer         Issuer?  @relation(fields: [issuerId], references: [id])
+  verifierOrg    VerifierOrg? @relation(fields: [verifierOrgId], references: [id])
+  createdAt      DateTime @default(now())
+  AuditLog       AuditLog[]
+  VerificationResult VerificationResult[] @relation("VerificationUser")
+}
+
+model Issuer {
+  id            String   @id @default(cuid())
+  name          String
+  publicKeyPem  String
+  privateKeyPem String
+  createdAt     DateTime @default(now())
+  users         User[]
+  certificates  Certificate[]
+}
+
+model VerifierOrg {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  users     User[]
+}
+
+model Certificate {
+  id        String   @id // docId
+  issuerId  String
+  issuer    Issuer   @relation(fields: [issuerId], references: [id])
+  fileUrl   String
+  hash      String
+  signature String
+  issuedAt  DateTime @default(now())
+  meta      Json
+}
+
+model ChainRecord {
+  id        String   @id @default(cuid())
+  docId     String   @unique
+  data      Json
+  recordedAt DateTime @default(now())
+}
+
+model VerificationResult {
+  id        String   @id @default(cuid())
+  docId     String
+  status    VerificationStatus
+  reasons   String   // JSON stringified array of reasons
+  checkedAt DateTime @default(now())
+  verifierUserId String?
+  verifier  User?    @relation("VerificationUser", fields: [verifierUserId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    ActionType
+  userId    String
+  role      Role
+  refType   String
+  refId     String
+  details   Json
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
