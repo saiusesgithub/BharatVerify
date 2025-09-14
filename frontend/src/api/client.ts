@@ -45,6 +45,30 @@ export const api = {
     });
   },
 
+  async issueCertificate(input: { docId?: string; title?: string; reason?: string; ownerId?: string; file: File }, onProgress?: (pct: number) => void): Promise<any> {
+    const token = sessionStorage.getItem('token');
+    const form = new FormData();
+    if (input.docId) form.append('docId', input.docId);
+    if (input.title) form.append('title', input.title);
+    if (input.reason) form.append('reason', input.reason);
+    if (input.ownerId) form.append('ownerId', input.ownerId);
+    form.append('pdf', input.file);
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${BASE_URL}/api/admin/issue`);
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText));
+        else reject(new Error(`Issue failed ${xhr.status}`));
+      };
+      xhr.onerror = () => reject(new Error('Network error'));
+      xhr.send(form);
+    });
+  },
+
   async verify(docId: string): Promise<{ status: 'PASS' | 'FAIL'; reasons: string[] }> {
     const res = await fetch(`${BASE_URL}/api/verifications/verify`, {
       method: 'POST',
@@ -61,4 +85,3 @@ export const api = {
     return handle(res);
   }
 };
-

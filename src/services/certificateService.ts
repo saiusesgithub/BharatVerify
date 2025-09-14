@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { sha256Bytes, buildSignatureMessage, signMessageHash } from './crypto';
 import { chainAdapter } from './chainAdapter';
 import { config } from '../config/secrets';
+import { generateQrPngBytes, stampQr, addMetadata } from './pdf';
 
 export class CertificateService {
   constructor(
@@ -25,11 +26,14 @@ export class CertificateService {
     const user = await this.prisma.user.findUnique({ where: { id: params.issuerUserId }, include: { issuer: true } });
     if (!user || !user.issuer) throw new Error('Issuer not found for user');
 
-    // Note: QR/metadata stamping is out-of-scope here; hash the provided PDF bytes.
     const issuedAtUnix = Math.floor(Date.now() / 1000);
-    const sha256Hex = sha256Bytes(params.fileBuffer);
-    const fileUrl = await this.storage.upload(params.fileBuffer, params.originalName);
     const docId = params.docId || crypto.randomUUID();
+    const qrText = `${process.env.QR_BASE_URL || 'https://example.invalid/cert/'}${docId}`;
+    const qr = await generateQrPngBytes(qrText);
+    const stamped = await stampQr(params.fileBuffer, qr, 'bottom-right');
+    const withMeta = await addMetadata(stamped, { DocId: docId, IssuedAt: String(issuedAtUnix), IssuerAddr: config.issuerAddress || undefined });
+    const sha256Hex = sha256Bytes(withMeta);
+    const fileUrl = await this.storage.upload(withMeta, params.originalName);
 
     const cert = await this.prisma.certificate.create({
       data: {

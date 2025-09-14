@@ -4,7 +4,10 @@ import { api } from '../../api/client';
 
 export function AdminUpload() {
   const [file, setFile] = React.useState<File | null>(null);
-  const [meta, setMeta] = React.useState({ kind: 'transcript', studentRef: '', notes: '' });
+  const [docId, setDocId] = React.useState('');
+  const [title, setTitle] = React.useState('');
+  const [reason, setReason] = React.useState('initial-issue');
+  const [ownerId, setOwnerId] = React.useState('');
   const [progress, setProgress] = React.useState(0);
   const [result, setResult] = React.useState<{ id: string; hash: string; signature: string } | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -18,8 +21,7 @@ export function AdminUpload() {
     setLoading(true);
     setProgress(0);
     try {
-      const payload = { kind: meta.kind, studentRef: meta.studentRef, notes: meta.notes };
-      const res = await api.uploadCertificate(payload, file, (pct) => setProgress(pct));
+      const res: any = await api.issueCertificate({ docId: docId || undefined, title: title || undefined, reason: reason || undefined, ownerId: ownerId || undefined, file }, (pct) => setProgress(pct));
       setResult(res);
     } catch (err: any) {
       setError(err.message || 'Upload failed');
@@ -38,20 +40,20 @@ export function AdminUpload() {
           {file && <div className="text-xs mt-2">{file.name} • {(file.size/1024).toFixed(1)} KB</div>}
         </div>
         <div className="mb-3">
-          <label className="label">Kind</label>
-          <select className="input" value={meta.kind} onChange={(e) => setMeta({ ...meta, kind: e.target.value })}>
-            <option value="transcript">Transcript</option>
-            <option value="degree">Degree</option>
-            <option value="certificate">Certificate</option>
-          </select>
+          <label className="label">Doc ID (optional)</label>
+          <input className="input" value={docId} onChange={(e) => setDocId(e.target.value)} placeholder="auto-generate if blank" />
         </div>
         <div className="mb-3">
-          <label className="label">Student Ref</label>
-          <input className="input" value={meta.studentRef} onChange={(e) => setMeta({ ...meta, studentRef: e.target.value })} required />
+          <label className="label">Title</label>
+          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., B.Tech Degree" />
+        </div>
+        <div className="mb-3">
+          <label className="label">Reason</label>
+          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
         <div className="mb-4">
-          <label className="label">Notes</label>
-          <textarea className="input" rows={4} value={meta.notes} onChange={(e) => setMeta({ ...meta, notes: e.target.value })} />
+          <label className="label">Owner Id (optional)</label>
+          <input className="input" value={ownerId} onChange={(e) => setOwnerId(e.target.value)} placeholder="student id/email" />
         </div>
         {progress > 0 && loading && (
           <div className="w-full bg-gray-200 dark:bg-gray-700 rounded h-2 mb-2">
@@ -67,8 +69,9 @@ export function AdminUpload() {
         {!result && <div className="text-sm text-gray-500">Upload a file to see the result.</div>}
         {result && (
           <div className="space-y-2">
-            <div><span className="font-medium">docId:</span> {result.id} <button className="btn-secondary ml-2" onClick={() => navigator.clipboard.writeText(result.id)}>Copy</button></div>
-            <div><span className="font-medium">hash:</span> <span className="break-all">{result.hash}</span></div>
+            <div><span className="font-medium">docId:</span> {result.docId} <button className="btn-secondary ml-2" onClick={() => navigator.clipboard.writeText(result.docId)}>Copy</button></div>
+            <div><span className="font-medium">sha256Hex:</span> <span className="break-all">{result.sha256Hex}</span></div>
+            {result.txHash && <div><span className="font-medium">tx:</span> <a className="text-blue-600 underline" href={result.explorerUrl} target="_blank" rel="noreferrer">{result.txHash}</a></div>}
             <div className="text-xs text-gray-500">Keep the docId for verification.</div>
           </div>
         )}
@@ -76,4 +79,3 @@ export function AdminUpload() {
     </div>
   );
 }
-
