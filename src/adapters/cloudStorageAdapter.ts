@@ -41,7 +41,7 @@ export function createR2CloudStorage(): CloudStorageAdapter {
   if (!accountId || !accessKeyId || !secretAccessKey || !bucket) {
     throw new Error('R2 configuration missing: set R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET');
   }
-  const endpoint = `https://${accountId}.r2.cloudflarestorage.com`;
+  const endpoint = process.env.R2_ENDPOINT || `https://${accountId}.r2.cloudflarestorage.com`;
   const s3 = new S3Client({
     region: 'auto',
     endpoint,
