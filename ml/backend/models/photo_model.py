@@ -25,7 +25,8 @@ def _largest_face_roi(image: np.ndarray, faces: List[Tuple[int, int, int, int]])
     if not faces:
         return None
     x, y, w, h = max(faces, key=lambda b: b[2] * b[3])
-    pad = 8
+    # expand to approximate full portrait region (include background/frame)
+    pad = max(8, int(max(w, h) * 0.3))
     x0 = max(0, x - pad)
     y0 = max(0, y - pad)
     x1 = min(image.shape[1], x + w + pad)
@@ -53,6 +54,34 @@ def _orb_match_similarity(a: np.ndarray, b: np.ndarray) -> float:
         return 0.0
 
 
+def _ssim_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    try:
+        from skimage.metrics import structural_similarity as ssim
+        gray_a = cv2.cvtColor(a, cv2.COLOR_BGR2GRAY)
+        gray_b = cv2.cvtColor(b, cv2.COLOR_BGR2GRAY)
+        if gray_a.shape != gray_b.shape:
+            gray_b = cv2.resize(gray_b, (gray_a.shape[1], gray_a.shape[0]))
+        score = ssim(gray_a, gray_b)
+        return float(score)
+    except Exception:
+        return 0.0
+
+
+def _edge_change_ratio(a: np.ndarray, b: np.ndarray) -> float:
+    try:
+        g1 = cv2.cvtColor(a, cv2.COLOR_BGR2GRAY)
+        g2 = cv2.cvtColor(b, cv2.COLOR_BGR2GRAY)
+        if g1.shape != g2.shape:
+            g2 = cv2.resize(g2, (g1.shape[1], g1.shape[0]))
+        e1 = cv2.Canny(g1, 50, 150)
+        e2 = cv2.Canny(g2, 50, 150)
+        # relative difference in edge pixels
+        d = cv2.absdiff(e1, e2)
+        return float(np.count_nonzero(d)) / float(max(1, e1.size))
+    except Exception:
+        return 1.0
+
+
 def verify_photo(original_path: str, uploaded_path: str) -> Dict[str, Any]:
     """
     Cross-check photos between original and uploaded certificate using OpenCV only.
@@ -68,6 +97,8 @@ def verify_photo(original_path: str, uploaded_path: str) -> Dict[str, Any]:
         "matched": 0,
         "num_photos_in_uploaded": 0,
         "similarity": 0.0,
+        "ssim": 0.0,
+        "edge_change": 0.0,
     }
 
     try:
@@ -94,7 +125,7 @@ def verify_photo(original_path: str, uploaded_path: str) -> Dict[str, Any]:
             result["message"] = "Missing photo in uploaded certificate"
             return result
 
-        # Compare largest faces using ORB similarity
+        # Compare largest faces using multiple signals focused on the portrait region
         o_roi = _largest_face_roi(original, orig_boxes)
         u_roi = _largest_face_roi(uploaded, up_boxes)
         if o_roi is None or u_roi is None:
@@ -103,15 +134,28 @@ def verify_photo(original_path: str, uploaded_path: str) -> Dict[str, Any]:
             return result
 
         sim = _orb_match_similarity(o_roi, u_roi)
+        ssim_val = _ssim_similarity(o_roi, u_roi)
+        edge_diff = _edge_change_ratio(o_roi, u_roi)
         result["similarity"] = float(sim)
-        is_match = sim >= 0.12  # heuristic threshold
+        result["ssim"] = float(ssim_val)
+        result["edge_change"] = float(edge_diff)
+
+        # Decision: require both structure and local features to be similar, and not too much overdraw/noise
+        is_match = (sim >= 0.12 and ssim_val >= 0.75 and edge_diff <= 0.25)
         result["matched"] = 1 if is_match else 0
         if is_match:
             result["status"] = "authentic"
             result["message"] = "Photo region appears consistent with original"
         else:
             result["status"] = "tampered"
-            result["message"] = "Photo region differs from original"
+            reasons = []
+            if sim < 0.12:
+                reasons.append(f"low ORB match {sim:.2f}")
+            if ssim_val < 0.75:
+                reasons.append(f"low SSIM {ssim_val:.2f}")
+            if edge_diff > 0.25:
+                reasons.append(f"excess edge change {edge_diff:.2f}")
+            result["message"] = "Photo region differs from original (" + ", ".join(reasons) + ")"
 
     except Exception as e:
         result["status"] = "tampered"
@@ -126,4 +170,3 @@ if __name__ == "__main__":
         print("Usage: python photo_model.py <original> <uploaded>")
         raise SystemExit(1)
     print(json.dumps(verify_photo(sys.argv[1], sys.argv[2]), indent=2))
-

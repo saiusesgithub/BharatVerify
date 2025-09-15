@@ -4,6 +4,7 @@ from typing import Dict, Any, List, Tuple
 import cv2
 import numpy as np
 from skimage.metrics import structural_similarity as ssim
+import os
 
 try:
     import pytesseract  # Optional, used for auxiliary text consistency check
@@ -22,7 +23,8 @@ def _align_to_template(uploaded: np.ndarray, template: np.ndarray) -> Tuple[np.n
     gray_u = cv2.cvtColor(uploaded, cv2.COLOR_BGR2GRAY)
     gray_t = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
 
-    orb = cv2.ORB_create(5000)
+    # Fewer keypoints for speed
+    orb = cv2.ORB_create(2000)
     keypoints_u, descriptors_u = orb.detectAndCompute(gray_u, None)
     keypoints_t, descriptors_t = orb.detectAndCompute(gray_t, None)
 
@@ -47,12 +49,41 @@ def _align_to_template(uploaded: np.ndarray, template: np.ndarray) -> Tuple[np.n
     return aligned, {"aligned": True, "matches": int(len(matches))}
 
 
-def _compute_ssim_and_diff(template: np.ndarray, aligned: np.ndarray) -> Tuple[float, np.ndarray]:
+def _detect_face_regions(image: np.ndarray) -> List[Tuple[int, int, int, int]]:
+    try:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        if cascade.empty():
+            return []
+        faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40))
+        out: List[Tuple[int, int, int, int]] = []
+        for (x, y, w, h) in faces:
+            # expand slightly to cover portrait frame
+            pad_w = int(w * 0.3)
+            pad_h = int(h * 0.3)
+            out.append((max(0, int(x - pad_w)), max(0, int(y - pad_h)), int(w + 2 * pad_w), int(h + 2 * pad_h)))
+        return out
+    except Exception:
+        return []
+
+
+def _compute_ssim_and_diff(template: np.ndarray, aligned: np.ndarray, ignore_boxes: List[Tuple[int, int, int, int]] | None = None) -> Tuple[float, np.ndarray]:
     gray_t = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
     gray_a = cv2.cvtColor(aligned, cv2.COLOR_BGR2GRAY)
 
     if gray_t.shape != gray_a.shape:
         gray_a = cv2.resize(gray_a, (gray_t.shape[1], gray_t.shape[0]))
+
+    if ignore_boxes:
+        mask = np.zeros_like(gray_t, dtype=np.uint8)
+        h, w = gray_t.shape
+        for (x, y, bw, bh) in ignore_boxes:
+            x0, y0 = max(0, x), max(0, y)
+            x1, y1 = min(w, x + bw), min(h, y + bh)
+            mask[y0:y1, x0:x1] = 1
+        # Make aligned equal to template in ignored regions so SSIM is unaffected there
+        gray_a = gray_a.copy()
+        gray_a[mask == 1] = gray_t[mask == 1]
 
     score, diff = ssim(gray_t, gray_a, full=True)
     diff = (1 - diff)  # invert: higher means more different
@@ -76,6 +107,9 @@ def _locate_tampered_regions(diff: np.ndarray, min_area: int = 500) -> List[Tupl
 
 
 def _ocr_text(image: np.ndarray) -> str:
+    # Allow disabling OCR for speed via env var
+    if os.environ.get('ML_DISABLE_OCR', '').lower() in ('1', 'true', 'yes'):
+        return ""
     if pytesseract is None:
         return ""
     try:
@@ -115,9 +149,33 @@ def verify_layout(original_path: str, uploaded_path: str) -> Dict[str, Any]:
         aligned, align_info = _align_to_template(uploaded, template)
         result["aligned"] = 1 if align_info.get("aligned") else 0
 
-        ssim_score, diff = _compute_ssim_and_diff(template, aligned)
+        # Build ignore regions from detected face/photo areas in both images (to avoid penalizing portrait changes)
+        ignore_regions: List[Tuple[int, int, int, int]] = []
+        try:
+            faces_t = _detect_face_regions(template)
+            faces_a = _detect_face_regions(aligned)
+            ignore_regions = faces_t + faces_a
+        except Exception:
+            ignore_regions = []
+
+        ssim_score, diff = _compute_ssim_and_diff(template, aligned, ignore_regions)
         result["ssim_score"] = float(ssim_score)
         boxes = _locate_tampered_regions(diff)
+        # Filter out tampered boxes that lie mostly within ignore regions
+        if ignore_regions and boxes:
+            def intersects_ignored(b: Tuple[int, int, int, int]) -> bool:
+                x, y, w, h = b
+                area = max(1, w * h)
+                for (ix, iy, iw, ih) in ignore_regions:
+                    x0 = max(x, ix)
+                    y0 = max(y, iy)
+                    x1 = min(x + w, ix + iw)
+                    y1 = min(y + h, iy + ih)
+                    inter = max(0, x1 - x0) * max(0, y1 - y0)
+                    if inter / area > 0.5:
+                        return True
+                return False
+            boxes = [b for b in boxes if not intersects_ignored(b)]
         result["tampered_regions"] = [list(b) for b in boxes]
 
         # Optional OCR text consistency check
@@ -141,7 +199,7 @@ def verify_layout(original_path: str, uploaded_path: str) -> Dict[str, Any]:
             tampered = True
             tamper_reasons.append("Layout could not be aligned to template")
 
-        if ssim_score < 0.92:  # strict threshold for layout similarity
+        if ssim_score < 0.92:  # strict threshold for layout similarity (after masking photo regions)
             tampered = True
             tamper_reasons.append(f"Low SSIM score: {ssim_score:.3f}")
 
@@ -174,5 +232,3 @@ if __name__ == "__main__":  # manual test
         print("Usage: python layout_model.py <original> <uploaded>")
         sys.exit(1)
     print(json.dumps(verify_layout(sys.argv[1], sys.argv[2]), indent=2))
-
-

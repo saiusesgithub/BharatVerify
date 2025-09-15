@@ -69,9 +69,12 @@ export class VerificationService {
           logInfo(`[verify] ML overall_status: ${overall}`);
         } catch {}
       }
-    } catch {
+    } catch (e: any) {
       // Swallow ML errors to avoid blocking core verification
       ml = null;
+      try {
+        logInfo(`[verify] ML error: ${e?.message || String(e)}`);
+      } catch {}
     }
 
     const status = reasons.length === 0 ? 'PASS' : (cert.status === 'revoked' ? 'FAIL' : 'FAIL');

@@ -28,6 +28,7 @@ export async function registerVerificationRoutes(app: FastifyInstance) {
           const chunks: Buffer[] = [];
           for await (const chunk of part.file) chunks.push(chunk as Buffer);
           fileBuffer = Buffer.concat(chunks);
+          req.log.info({ bytes: fileBuffer.length }, '[verify] received file part');
         } else if (part.type === 'field') {
           if (part.fieldname === 'docId') docId = part.value;
           if (part.fieldname === 'sha256Hex') sha256Hex = part.value;
