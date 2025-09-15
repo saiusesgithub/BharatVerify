@@ -28,7 +28,7 @@ export function VerifyPage() {
         <h2 className="text-lg font-semibold mb-3">Verify Certificate</h2>
         <label className="label">Document ID</label>
         <input className="input mb-3" value={docId} onChange={(e) => setDocId(e.target.value)} required />
-        <label className="label">Scanned PDF (optional, enables ML)</label>
+        <label className="label">Scanned PDF (optional, enables AI)</label>
         <input className="input mb-3" type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} />
         {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
         <button className="btn-primary" disabled={!docId || loading}>{loading ? 'Verifying…' : 'Verify'}</button>
@@ -44,19 +44,39 @@ export function VerifyPage() {
                 {result.reasons.map((r, i) => <li key={i}>{r}</li>)}
               </ul>
             )}
-            {result.ml && (
-              <div className="mt-4">
-                <h3 className="font-semibold">ML Analysis</h3>
-                <div className="text-sm mt-1">Overall: <span className={`px-2 py-0.5 rounded ${result.ml.overall_status === 'authentic' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{result.ml.overall_status}</span></div>
-                <ul className="list-disc ml-6 mt-2 text-sm">
-                  {result.ml.layout && <li>Layout: {result.ml.layout.status} {result.ml.layout.message ? `- ${result.ml.layout.message}` : ''}</li>}
-                  {result.ml.photo && <li>Photo: {result.ml.photo.status} {result.ml.photo.message ? `- ${result.ml.photo.message}` : ''}</li>}
-                  {result.ml.seal && <li>Seal: {result.ml.seal.status} {result.ml.seal.message ? `- ${result.ml.seal.message}` : ''}</li>}
-                  {result.ml.signature && <li>Signature: {result.ml.signature.status} {result.ml.signature.message ? `- ${result.ml.signature.message}` : ''}</li>}
-                </ul>
+
+            <div className="mt-4">
+              <h3 className="font-semibold">AI Analysis</h3>
+              <div className="text-sm mt-1">
+                Overall: {result.ml ? (
+                  <span className={`px-2 py-0.5 rounded ${result.ml.overall_status === 'authentic' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{result.ml.overall_status}</span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-700">Not run</span>
+                )}
               </div>
-            )}
-            <button className="btn-secondary mt-3" onClick={() => navigator.clipboard.writeText(`Verification ${result.status}${result.reasons?.length ? `: ${result.reasons.join(', ')}` : ''}${result.ml ? ` | ML: ${result.ml.overall_status}` : ''}`)}>Copy summary</button>
+              {!result.ml && (
+                <div className="text-xs text-gray-500 mt-1">Attach a scanned PDF to enable AI checks (layout, photo, seal, signature).</div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                {(['layout','photo','seal','signature'] as const).map((key) => {
+                  const item: any = (result as any)?.ml?.[key];
+                  const status = item?.status || 'not_run';
+                  const badgeClass = status === 'authentic' ? 'bg-green-100 text-green-700' : (status === 'tampered' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700');
+                  const label = status === 'not_run' ? 'Not run' : status;
+                  const title = key.charAt(0).toUpperCase() + key.slice(1);
+                  return (
+                    <div key={key} className="border rounded p-3">
+                      <div className="flex items-center justify-between">
+                        <div className="font-medium">{title}</div>
+                        <span className={`text-xs px-2 py-0.5 rounded ${badgeClass}`}>{label}</span>
+                      </div>
+                      {item?.message && <div className="text-xs text-gray-600 mt-2">{item.message}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <button className="btn-secondary mt-3" onClick={() => navigator.clipboard.writeText(`Verification ${result.status}${result.reasons?.length ? `: ${result.reasons.join(', ')}` : ''}${result.ml ? ` | AI: ${result.ml.overall_status}` : ''}`)}>Copy summary</button>
           </div>
         )}
       </div>

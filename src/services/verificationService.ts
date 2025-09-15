@@ -5,6 +5,7 @@ import { KeyRegistry } from '../adapters/keyRegistry';
 import { chainAdapter } from './chainAdapter';
 import { sha256Bytes } from './crypto';
 import { mlAdapter, MlVerifyResponse } from './mlAdapter';
+import { logInfo } from '../infra/logging';
 
 export class VerificationService {
   constructor(
@@ -57,9 +58,16 @@ export class VerificationService {
     // Optional ML analysis (only when an uploaded file is provided and ML is configured)
     let ml: MlVerifyResponse | null = null;
     try {
-      if (params.fileBuffer && mlAdapter.enabled()) {
+      const fbSize = params.fileBuffer ? params.fileBuffer.length : 0;
+      const mlEnabled = mlAdapter.enabled();
+      logInfo(`[verify] fileBuffer size: ${fbSize} bytes, mlEnabled: ${mlEnabled}`);
+      if (params.fileBuffer && mlEnabled) {
         const originalBytes = await this.storage.download(cert.fileUrl);
         ml = await mlAdapter.analyzePair(originalBytes, params.fileBuffer);
+        try {
+          const overall = (ml as any)?.overall_status ?? 'unknown';
+          logInfo(`[verify] ML overall_status: ${overall}`);
+        } catch {}
       }
     } catch {
       // Swallow ML errors to avoid blocking core verification
