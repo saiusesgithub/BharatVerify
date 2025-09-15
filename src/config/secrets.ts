@@ -10,7 +10,12 @@ export const config = {
   chainAdapterUrl: process.env.CHAIN_ADAPTER_URL || '',
   issuerPrivKeyHex: process.env.ISSUER_SIGNING_PRIVATE_KEY || '',
   issuerAddress: process.env.ISSUER_ADDRESS || '',
-  signingScheme: process.env.SIGNING_SCHEME || 'keccak-ecrecover'
+  signingScheme: process.env.SIGNING_SCHEME || 'keccak-ecrecover',
+  ml: {
+    baseUrl: process.env.ML_BASE_URL || '',
+    apiKey: process.env.ML_API_KEY || '',
+    timeoutMs: parseInt(process.env.ML_TIMEOUT_MS || '20000', 10)
+  }
 };
 
 export function validateConfigAtStartup() {
@@ -21,4 +26,3 @@ export function validateConfigAtStartup() {
     console.warn('[WARN] ISSUER_SIGNING_PRIVATE_KEY not set; issuance will proceed without issuer ECDSA signature.');
   }
 }
-

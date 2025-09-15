@@ -13,6 +13,8 @@ async function handle<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
+export type VerifyResponse = { status: 'PASS' | 'FAIL'; reasons: string[]; ml?: any };
+
 export const api = {
   async login(email: string, password: string): Promise<{ token: string }> {
     const res = await fetch(`${BASE_URL}/api/auth/login`, {
@@ -69,11 +71,23 @@ export const api = {
     });
   },
 
-  async verify(docId: string): Promise<{ status: 'PASS' | 'FAIL'; reasons: string[] }> {
+  async verify(docId: string): Promise<VerifyResponse> {
     const res = await fetch(`${BASE_URL}/api/verifications/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeader() },
       body: JSON.stringify({ docId })
+    });
+    return handle(res);
+  },
+
+  async verifyWithFile(docId: string, file: File): Promise<VerifyResponse> {
+    const form = new FormData();
+    form.append('docId', docId);
+    form.append('pdf', file);
+    const res = await fetch(`${BASE_URL}/api/verifications/verify`, {
+      method: 'POST',
+      headers: { ...authHeader() },
+      body: form
     });
     return handle(res);
   },

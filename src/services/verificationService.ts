@@ -4,6 +4,7 @@ import { BlockchainAdapter } from '../adapters/blockchainAdapter';
 import { KeyRegistry } from '../adapters/keyRegistry';
 import { chainAdapter } from './chainAdapter';
 import { sha256Bytes } from './crypto';
+import { mlAdapter, MlVerifyResponse } from './mlAdapter';
 
 export class VerificationService {
   constructor(
@@ -53,6 +54,18 @@ export class VerificationService {
       }
     }
 
+    // Optional ML analysis (only when an uploaded file is provided and ML is configured)
+    let ml: MlVerifyResponse | null = null;
+    try {
+      if (params.fileBuffer && mlAdapter.enabled()) {
+        const originalBytes = await this.storage.download(cert.fileUrl);
+        ml = await mlAdapter.analyzePair(originalBytes, params.fileBuffer);
+      }
+    } catch {
+      // Swallow ML errors to avoid blocking core verification
+      ml = null;
+    }
+
     const status = reasons.length === 0 ? 'PASS' : (cert.status === 'revoked' ? 'FAIL' : 'FAIL');
     await this.prisma.verificationResult.create({
       data: { docId: cert.id, status: status, reasons: JSON.stringify(reasons), verifierUserId: user.id }
@@ -64,7 +77,7 @@ export class VerificationService {
         result: status.toLowerCase(),
         hashMatch: !reasons.includes('HASH_MISMATCH'),
         issuerVerified,
-        mlSummary: null,
+        mlSummary: ml ? JSON.stringify(ml) : null,
         details: JSON.stringify({ reasons, on }),
         atUnix: Math.floor(Date.now()/1000)
       }
@@ -80,7 +93,8 @@ export class VerificationService {
       }
     });
 
-    return { status, reasons };
+    // include compact ML summary in response when available
+    return { status, reasons, ...(ml ? { ml } : {}) } as any;
   }
 }
 
