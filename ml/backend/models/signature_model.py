@@ -122,4 +122,3 @@ if __name__ == "__main__":
         raise SystemExit(1)
     print(json.dumps(verify_signature(sys.argv[1], sys.argv[2]), indent=2))
 
-

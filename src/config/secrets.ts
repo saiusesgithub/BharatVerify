@@ -11,6 +11,7 @@ export const config = {
   issuerPrivKeyHex: process.env.ISSUER_SIGNING_PRIVATE_KEY || '',
   issuerAddress: process.env.ISSUER_ADDRESS || '',
   signingScheme: process.env.SIGNING_SCHEME || 'keccak-ecrecover',
+  verifyRequireIssuerActive: (process.env.VERIFY_REQUIRE_ISSUER_ACTIVE || 'true').toLowerCase() === 'true',
   ml: {
     baseUrl: process.env.ML_BASE_URL || '',
     apiKey: process.env.ML_API_KEY || '',

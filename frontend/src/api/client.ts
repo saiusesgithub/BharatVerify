@@ -1,4 +1,5 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+const CHAIN_ADAPTER_URL = (import.meta as any).env.VITE_CHAIN_ADAPTER_URL || 'http://localhost:8088';
 
 function authHeader() {
   const token = sessionStorage.getItem('token');
@@ -95,6 +96,15 @@ export const api = {
   async audit(limit = 20, offset = 0): Promise<{ items: any[] }> {
     const res = await fetch(`${BASE_URL}/api/audit?limit=${limit}&offset=${offset}`, {
       headers: { ...authHeader() }
+    });
+    return handle(res);
+  },
+
+  async chainAddIssuer(address: string, name: string): Promise<{ txHash?: string; explorerUrl?: string }> {
+    const res = await fetch(`${CHAIN_ADAPTER_URL}/issuer/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address, name })
     });
     return handle(res);
   }

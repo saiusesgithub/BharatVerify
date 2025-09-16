@@ -6,6 +6,7 @@ import { chainAdapter } from './chainAdapter';
 import { sha256Bytes } from './crypto';
 import { mlAdapter, MlVerifyResponse } from './mlAdapter';
 import { logInfo } from '../infra/logging';
+import { config } from '../config/secrets';
 
 export class VerificationService {
   constructor(
@@ -47,8 +48,13 @@ export class VerificationService {
     let issuerVerified = false;
     if (cert.signatureHex && cert.issuerAddress) {
       try {
-        const sig = await chainAdapter.verifySignature({ docId: cert.id, sha256Hex: computed!, issuedAtUnix: cert.issuedAtUnix || Math.floor(new Date(cert.issuedAt).getTime()/1000), signatureHex: cert.signatureHex, expectedIssuer: cert.issuerAddress });
-        issuerVerified = sig.matchesExpected && sig.issuerActive;
+        // Use the stored sha256 for signature verification to attest the issued artifact,
+        // independent of the uploaded bytes. Still report HASH_MISMATCH separately.
+        const shaForSignature = (cert.sha256Hex || cert.hash);
+        const sig = await chainAdapter.verifySignature({ docId: cert.id, sha256Hex: shaForSignature, issuedAtUnix: cert.issuedAtUnix || Math.floor(new Date(cert.issuedAt).getTime()/1000), signatureHex: cert.signatureHex, expectedIssuer: cert.issuerAddress });
+        try { logInfo(`[verify] signature: matchesExpected=${sig.matchesExpected}, issuerActive=${sig.issuerActive}`); } catch {}
+        // Optionally require registry active status
+        issuerVerified = sig.matchesExpected && (config.verifyRequireIssuerActive ? sig.issuerActive : true);
         if (!issuerVerified) reasons.push('SIG_INVALID');
       } catch {
         reasons.push('SIG_INVALID');

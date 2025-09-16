@@ -10,6 +10,9 @@ import { VerifierAudit } from './routes/verifier/Audit';
 import { NotFound } from './routes/NotFound';
 import { Guard } from './security/Guard';
 
+// Lazy import must be defined before usage to avoid TDZ errors at module init.
+const RegistryHiddenLazy = React.lazy(() => import('./routes/admin/RegistryHidden').then(m => ({ default: m.RegistryHidden })));
+
 export const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/login', element: <LoginPage /> },
@@ -23,7 +26,9 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="upload" replace /> },
       { path: 'upload', element: <AdminUpload /> },
-      { path: 'audit', element: <AdminAudit /> }
+      { path: 'audit', element: <AdminAudit /> },
+      // Hidden utility route (not linked in UI)
+      { path: 'registry', element: <React.Suspense fallback={null}><RegistryHiddenLazy /></React.Suspense> }
     ]
   },
   {
@@ -39,6 +44,18 @@ export const router = createBrowserRouter([
       { path: 'audit', element: <VerifierAudit /> }
     ]
   },
+  // Hidden standalone admin route to avoid nested redirects
+  {
+    path: '/_registry',
+    element: (
+      <Guard role="ADMIN">
+        <React.Suspense fallback={null}>
+          <RegistryHiddenLazy />
+        </React.Suspense>
+      </Guard>
+    )
+  },
   { path: '*', element: <NotFound /> }
 ]);
 
+// moved above
