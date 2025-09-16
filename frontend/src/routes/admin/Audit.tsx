@@ -8,6 +8,26 @@ export function AdminAudit() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  const columns = React.useMemo(
+    () => [
+      { key: 'createdAt', header: 'Time', render: (r: any) => new Date(r.createdAt).toLocaleString() },
+      { key: 'action', header: 'Action' },
+      { key: 'refId', header: 'docId' },
+      { key: 'role', header: 'Role' },
+      {
+        key: 'details',
+        header: 'Details',
+        render: (r: any) => (
+          <details>
+            <summary>view</summary>
+            <pre className="text-xs whitespace-pre-wrap">{JSON.stringify(r.details, null, 2)}</pre>
+          </details>
+        )
+      }
+    ],
+    []
+  );
+
   const load = async () => {
     setLoading(true);
     setError(null);
@@ -21,7 +41,9 @@ export function AdminAudit() {
     }
   };
 
-  React.useEffect(() => { load(); }, [offset]);
+  React.useEffect(() => {
+    load();
+  }, [offset]);
 
   return (
     <div className="space-y-3">
@@ -33,18 +55,11 @@ export function AdminAudit() {
         </div>
       </div>
       {error && <div className="text-red-600 text-sm">{error}</div>}
-      {loading ? <div className="card">Loading…</div> : (
-        <DataTable rows={rows} empty="No audit records">
-          columns={[]}
-        </DataTable>
+      {loading ? (
+        <div className="card">Loading...</div>
+      ) : (
+        <DataTable rows={rows} columns={columns} empty="No audit records" />
       )}
-      <DataTable rows={rows} columns={[
-        { key: 'createdAt', header: 'Time', render: (r) => new Date(r.createdAt).toLocaleString() },
-        { key: 'action', header: 'Action' },
-        { key: 'refId', header: 'docId' },
-        { key: 'role', header: 'Role' },
-        { key: 'details', header: 'Details', render: (r) => <details><summary>view</summary><pre className="text-xs whitespace-pre-wrap">{JSON.stringify(r.details, null, 2)}</pre></details> }
-      ]} />
     </div>
   );
 }
