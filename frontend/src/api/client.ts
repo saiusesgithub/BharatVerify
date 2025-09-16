@@ -26,7 +26,7 @@ export const api = {
     return handle(res);
   },
 
-  async uploadCertificate(meta: unknown, file: File, onProgress?: (pct: number) => void): Promise<{ id: string; hash: string; signature: string }> {
+  async uploadCertificate(meta: unknown, file: File, onProgress?: (pct: number) => void): Promise<{ id: string; hash: string; signature: string; downloadUrl?: string; downloadPath?: string }> {
     const token = sessionStorage.getItem('token');
     const form = new FormData();
     form.append('meta', JSON.stringify(meta));

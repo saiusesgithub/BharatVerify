@@ -9,7 +9,7 @@ export function AdminUpload() {
   const [reason, setReason] = React.useState('initial-issue');
   const [ownerId, setOwnerId] = React.useState('');
   const [progress, setProgress] = React.useState(0);
-  const [result, setResult] = React.useState<{ id: string; hash: string; signature: string } | null>(null);
+  const [result, setResult] = React.useState<any | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
 
@@ -27,6 +27,29 @@ export function AdminUpload() {
       setError(err.message || 'Upload failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const API_BASE = (import.meta as any).env.VITE_API_BASE_URL || 'http://localhost:3000';
+  const doDownload = async () => {
+    if (!result) return;
+    const token = sessionStorage.getItem('token') || '';
+    const path: string | undefined = result.downloadPath;
+    if (!path) return alert('No download path available');
+    try {
+      const res = await fetch(`${API_BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (result.title || 'certificate') + '.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert('Download failed: ' + (e?.message || String(e)));
     }
   };
 
@@ -72,6 +95,17 @@ export function AdminUpload() {
             <div><span className="font-medium">docId:</span> {result.docId} <button className="btn-secondary ml-2" onClick={() => navigator.clipboard.writeText(result.docId)}>Copy</button></div>
             <div><span className="font-medium">sha256Hex:</span> <span className="break-all">{result.sha256Hex}</span></div>
             {result.txHash && <div><span className="font-medium">tx:</span> <a className="text-blue-600 underline" href={result.explorerUrl} target="_blank" rel="noreferrer">{result.txHash}</a></div>}
+            {result.downloadPath && (
+              <div>
+                <button className="btn-primary" onClick={doDownload}>Download PDF</button>
+                <span className="text-xs text-gray-500 ml-2">(secure download via server)</span>
+              </div>
+            )}
+            {!result.downloadPath && result.downloadUrl && typeof result.downloadUrl === 'string' && result.downloadUrl.startsWith('http') && (
+              <div>
+                <a className="btn-secondary" href={result.downloadUrl} target="_blank" rel="noreferrer">Open File</a>
+              </div>
+            )}
             <div className="text-xs text-gray-500">Keep the docId for verification.</div>
           </div>
         )}

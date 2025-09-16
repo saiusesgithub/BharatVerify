@@ -16,7 +16,7 @@ export async function registerCertificateRoutes(app: FastifyInstance) {
     preHandler: [app.authenticate, requireRole(['ADMIN'])],
     schema: {
       consumes: ['multipart/form-data'],
-      response: { 200: { type: 'object', properties: { id: { type: 'string' }, hash: { type: 'string' } } } }
+      response: { 200: { type: 'object', properties: { id: { type: 'string' }, hash: { type: 'string' }, signature: { type: 'string' }, downloadUrl: { type: 'string' }, downloadPath: { type: 'string' } } } }
     }
   }, async (req, _reply) => {
     const mp = await req.parts();
@@ -43,7 +43,7 @@ export async function registerCertificateRoutes(app: FastifyInstance) {
       fileBuffer,
       originalName: fileName
     });
-    return { id: cert.id, hash: cert.hash, signature: cert.signature };
+    return { id: cert.id, hash: cert.hash, signature: cert.signature, downloadUrl: cert.r2Key, downloadPath: `/api/admin/certificates/${cert.id}/download` };
   });
 
   // New issuance endpoint per blockchain integration
@@ -92,7 +92,21 @@ export async function registerCertificateRoutes(app: FastifyInstance) {
       blockNumber: cert?.blockNumber,
       chain: cert?.chain,
       explorerUrl: cert?.explorerUrl,
-      downloadUrl: cert?.r2Key
+      downloadUrl: cert?.r2Key,
+      downloadPath: `/api/admin/certificates/${cert?.id}/download`
     };
+  });
+
+  // Admin: download the finalized (stamped + hashed) PDF
+  app.get('/certificates/:docId/download', {
+    preHandler: [app.authenticate, requireRole(['ADMIN'])]
+  }, async (req, reply) => {
+    const docId = (req.params as any).docId as string;
+    const cert = await prisma.certificate.findUnique({ where: { id: docId } });
+    if (!cert) return app.httpErrors.notFound('CERT_NOT_FOUND');
+    const bytes = await storage.download(cert.fileUrl);
+    reply.header('content-type', 'application/pdf');
+    reply.header('content-disposition', `attachment; filename="${(cert.title || 'certificate')}.pdf"`);
+    return reply.send(bytes);
   });
 }
