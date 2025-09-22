@@ -4,7 +4,9 @@ export const ErrorCodes = {
   CERT_NOT_FOUND: 'CERT_NOT_FOUND',
   HASH_MISMATCH: 'HASH_MISMATCH',
   SIG_INVALID: 'SIG_INVALID',
-  CHAIN_MISS: 'CHAIN_MISS'
+  CHAIN_MISS: 'CHAIN_MISS',
+  STUDENT_NOT_FOUND: 'STUDENT_NOT_FOUND',
+  STUDENT_FORBIDDEN: 'STUDENT_FORBIDDEN'
 } as const;
 
 export type ErrorCode = keyof typeof ErrorCodes;

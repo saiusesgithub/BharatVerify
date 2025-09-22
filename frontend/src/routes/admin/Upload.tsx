@@ -7,7 +7,10 @@ export function AdminUpload() {
   const [docId, setDocId] = React.useState('');
   const [title, setTitle] = React.useState('');
   const [reason, setReason] = React.useState('initial-issue');
-  const [ownerId, setOwnerId] = React.useState('');
+  const [studentId, setStudentId] = React.useState('');
+  const [studentEmail, setStudentEmail] = React.useState('');
+  const [studentName, setStudentName] = React.useState('');
+  const [studentRef, setStudentRef] = React.useState('');
   const [progress, setProgress] = React.useState(0);
   const [result, setResult] = React.useState<any | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -21,7 +24,19 @@ export function AdminUpload() {
     setLoading(true);
     setProgress(0);
     try {
-      const res: any = await api.issueCertificate({ docId: docId || undefined, title: title || undefined, reason: reason || undefined, ownerId: ownerId || undefined, file }, (pct) => setProgress(pct));
+      const res: any = await api.issueCertificate(
+        {
+          docId: docId || undefined,
+          title: title || undefined,
+          reason: reason || undefined,
+          studentId: studentId || undefined,
+          studentEmail: studentEmail || undefined,
+          studentName: studentName || undefined,
+          studentRef: studentRef || studentId || studentEmail || undefined,
+          file
+        },
+        (pct) => setProgress(pct)
+      );
       setResult(res);
     } catch (err: any) {
       setError(err.message || 'Upload failed');
@@ -60,7 +75,7 @@ export function AdminUpload() {
         <div className="mb-3">
           <label className="label">Document file</label>
           <FileDrop onFile={setFile} />
-          {file && <div className="text-xs mt-2">{file.name} • {(file.size/1024).toFixed(1)} KB</div>}
+          {file && <div className="text-xs mt-2">{file.name} ({(file.size / 1024).toFixed(1)} KB)</div>}
         </div>
         <div className="mb-3">
           <label className="label">Doc ID (optional)</label>
@@ -74,9 +89,25 @@ export function AdminUpload() {
           <label className="label">Reason</label>
           <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
         </div>
-        <div className="mb-4">
-          <label className="label">Owner Id (optional)</label>
-          <input className="input" value={ownerId} onChange={(e) => setOwnerId(e.target.value)} placeholder="student id/email" />
+        <div className="mb-3 grid gap-3 md:grid-cols-2">
+          <div>
+            <label className="label">Student Id</label>
+            <input className="input" value={studentId} onChange={(e) => setStudentId(e.target.value)} placeholder="existing student id" required />
+          </div>
+          <div>
+            <label className="label">Student Ref (roll no)</label>
+            <input className="input" value={studentRef} onChange={(e) => setStudentRef(e.target.value)} placeholder="roll / registration" />
+          </div>
+        </div>
+        <div className="mb-3 grid gap-3 md:grid-cols-2">
+          <div>
+            <label className="label">Student Email</label>
+            <input className="input" value={studentEmail} onChange={(e) => setStudentEmail(e.target.value)} placeholder="optional" />
+          </div>
+          <div>
+            <label className="label">Student Name</label>
+            <input className="input" value={studentName} onChange={(e) => setStudentName(e.target.value)} placeholder="optional" />
+          </div>
         </div>
         {progress > 0 && loading && (
           <div className="w-full bg-gray-200 dark:bg-gray-700 rounded h-2 mb-2">
@@ -84,7 +115,7 @@ export function AdminUpload() {
           </div>
         )}
         {error && <div className="text-red-600 text-sm mb-2">{error}</div>}
-        <button className="btn-primary" disabled={!file || loading}>{loading ? 'Uploading…' : 'Upload'}</button>
+        <button className="btn-primary" disabled={!file || loading || !studentId}>{loading ? 'Uploading...' : 'Upload'}</button>
       </form>
 
       <div className="card">

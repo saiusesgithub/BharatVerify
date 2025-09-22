@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { readFileSync, mkdirSync, writeFileSync } from 'fs';
@@ -62,6 +63,14 @@ async function main() {
     create: { email: 'verifier@example.com', passwordHash: hash, role: 'VERIFIER', verifierOrgId: verifierOrg.id }
   });
 
+  const studentPassword = bcrypt.hashSync('Student@123', 10);
+  const student = await prisma.student.upsert({
+    where: { email: 'student@example.com' },
+    update: { passwordHash: studentPassword, name: 'Demo Student' },
+    create: { email: 'student@example.com', passwordHash: studentPassword, name: 'Demo Student' }
+  });
+
+
   // Seed a demo certificate from demo/transcript.pdf
   const demoPath = path.join(process.cwd(), 'demo', 'transcript.pdf');
   const demoBytes = readFileSync(demoPath);
@@ -81,12 +90,14 @@ async function main() {
       fileUrl,
       hash: fileHashHex,
       signature: signature.toString('base64'),
-      meta: JSON.stringify({ kind: 'transcript', studentRef: 'sample' }),
+      meta: JSON.stringify({ kind: 'transcript', studentRef: 'sample', studentId: student.id }),
       title: 'Transcript',
       issuedAtUnix: Math.floor(Date.now()/1000),
       sha256Hex: fileHashHex,
       issuerAddress: null,
       signatureHex: null,
+      ownerId: student.id,
+      studentId: student.id,
       status: 'active',
       reason: 'initial-issue',
       r2Key: fileUrl,
@@ -115,3 +126,4 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
+

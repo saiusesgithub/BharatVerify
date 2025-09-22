@@ -7,7 +7,10 @@ export const LoginSchema = z.object({
 
 export const UploadMetaSchema = z.object({
   kind: z.string().min(1),
-  studentRef: z.string().min(1)
+  studentRef: z.string().min(1),
+  studentId: z.string().min(1).optional(),
+  studentEmail: z.string().email().optional(),
+  studentName: z.string().min(1).optional()
 });
 
 export const VerifySchema = z.object({
@@ -17,4 +20,3 @@ export const VerifySchema = z.object({
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type UploadMeta = z.infer<typeof UploadMetaSchema>;
 export type VerifyInput = z.infer<typeof VerifySchema>;
-

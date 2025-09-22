@@ -9,15 +9,24 @@ declare module 'fastify' {
   interface FastifyRequest {
     user?: {
       sub: string;
-      role: 'ADMIN' | 'VERIFIER';
+      role: 'ADMIN' | 'VERIFIER' | 'STUDENT';
       issuerId?: string;
       verifierOrgId?: string;
+      studentId?: string;
     };
   }
   interface FastifyInstance {
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }
+
+export type AuthenticatedPrincipal = {
+  id: string;
+  role: 'ADMIN' | 'VERIFIER' | 'STUDENT';
+  issuerId?: string;
+  verifierOrgId?: string;
+  studentId?: string;
+};
 
 export const authPlugin = fp(async function (app: FastifyInstance) {
   app.register(fastifyJwt, { secret: process.env.JWT_SECRET || 'dev_secret' });
@@ -32,7 +41,7 @@ export const authPlugin = fp(async function (app: FastifyInstance) {
   });
 });
 
-export function requireRole(roles: Array<'ADMIN' | 'VERIFIER'>) {
+export function requireRole(roles: Array<'ADMIN' | 'VERIFIER' | 'STUDENT'>) {
   return async function (request: FastifyRequest) {
     if (!request.user || !roles.includes(request.user.role)) {
       throw new AppError(ErrorCodes.FORBIDDEN, 'Forbidden', 403);
@@ -40,10 +49,25 @@ export function requireRole(roles: Array<'ADMIN' | 'VERIFIER'>) {
   };
 }
 
-export async function verifyCredentials(email: string, password: string) {
+export async function verifyCredentials(email: string, password: string): Promise<AuthenticatedPrincipal | null> {
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) return null;
-  const ok = bcrypt.compareSync(password, user.passwordHash);
-  if (!ok) return null;
-  return user;
+  if (user && bcrypt.compareSync(password, user.passwordHash)) {
+    return {
+      id: user.id,
+      role: user.role as 'ADMIN' | 'VERIFIER',
+      issuerId: user.issuerId || undefined,
+      verifierOrgId: user.verifierOrgId || undefined
+    };
+  }
+
+  const student = await prisma.student.findUnique({ where: { email } });
+  if (student && bcrypt.compareSync(password, student.passwordHash)) {
+    return {
+      id: student.id,
+      role: 'STUDENT',
+      studentId: student.id
+    };
+  }
+
+  return null;
 }

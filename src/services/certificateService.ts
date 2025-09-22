@@ -6,6 +6,7 @@ import { sha256Bytes, buildSignatureMessage, signMessageHash } from './crypto';
 import { chainAdapter } from './chainAdapter';
 import { config } from '../config/secrets';
 import { generateQrPngBytes, stampQr, addMetadata } from './pdf';
+import { AppError, ErrorCodes } from '../utils/errors';
 
 export class CertificateService {
   constructor(
@@ -22,6 +23,9 @@ export class CertificateService {
     title?: string;
     docId?: string;
     reason?: string;
+    studentId?: string;
+    studentEmail?: string;
+    studentName?: string;
   }) {
     const user = await this.prisma.user.findUnique({ where: { id: params.issuerUserId }, include: { issuer: true } });
     if (!user || !user.issuer) throw new Error('Issuer not found for user');
@@ -35,14 +39,45 @@ export class CertificateService {
     const sha256Hex = sha256Bytes(withMeta);
     const fileUrl = await this.storage.upload(withMeta, params.originalName);
 
+    const metaPayload: Record<string, any> = { ...(params.meta || {}) };
+
+    let studentRecord: { id: string; email: string | null; name: string | null } | null = null;
+    const metaStudentId = typeof metaPayload.studentId === 'string' ? String(metaPayload.studentId).trim() : undefined;
+    const payloadStudentId = typeof params.studentId === 'string' ? params.studentId.trim() : undefined;
+    const studentEmail = typeof params.studentEmail === 'string' ? params.studentEmail.trim() : (typeof metaPayload.studentEmail === 'string' ? String(metaPayload.studentEmail).trim() : undefined);
+
+    if (payloadStudentId) {
+      const student = await this.prisma.student.findUnique({ where: { id: payloadStudentId } });
+      if (!student) throw new AppError(ErrorCodes.STUDENT_NOT_FOUND, `Student ${payloadStudentId} not found`, 404);
+      studentRecord = { id: student.id, email: student.email, name: student.name || null };
+    } else if (metaStudentId) {
+      const student = await this.prisma.student.findUnique({ where: { id: metaStudentId } });
+      if (!student) throw new AppError(ErrorCodes.STUDENT_NOT_FOUND, `Student ${metaStudentId} not found`, 404);
+      studentRecord = { id: student.id, email: student.email, name: student.name || null };
+    } else if (studentEmail) {
+      const student = await this.prisma.student.findUnique({ where: { email: studentEmail } });
+      if (!student) throw new AppError(ErrorCodes.STUDENT_NOT_FOUND, `Student with email ${studentEmail} not found`, 404);
+      studentRecord = { id: student.id, email: student.email, name: student.name || null };
+    }
+
+    if (!studentRecord) {
+      throw new AppError(ErrorCodes.STUDENT_NOT_FOUND, 'Student identifier is required for issuance', 400);
+    }
+
+    metaPayload.studentId = studentRecord.id;
+    if (studentRecord.email) metaPayload.studentEmail = studentRecord.email;
+    if (params.studentName) metaPayload.studentName = params.studentName;
+
     const cert = await this.prisma.certificate.create({
       data: {
         id: docId,
         issuerId: user.issuer.id,
+        studentId: studentRecord.id,
+        ownerId: studentRecord.id,
         fileUrl,
         hash: sha256Hex,
         signature: '',
-        meta: JSON.stringify(params.meta || {}),
+        meta: JSON.stringify(metaPayload),
         title: params.title || null,
         issuedAtUnix,
         sha256Hex,
@@ -76,7 +111,7 @@ export class CertificateService {
         role: user.role,
         refType: 'Certificate',
         refId: docId,
-        details: JSON.stringify({ fileUrl, sha256Hex })
+        details: JSON.stringify({ fileUrl, sha256Hex, studentId: studentRecord.id })
       }
     });
 

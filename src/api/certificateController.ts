@@ -53,7 +53,10 @@ export async function registerCertificateRoutes(app: FastifyInstance) {
       issuerUserId: (req.user as any).sub,
       meta: parsed.data,
       fileBuffer,
-      originalName: fileName
+      originalName: fileName,
+      studentId: parsed.data.studentId,
+      studentEmail: parsed.data.studentEmail,
+      studentName: parsed.data.studentName
     });
     const issuerUser = await prisma.user.findUnique({ where: { id: (req.user as any).sub } });
     await emailService.notifyIssueSuccess({
@@ -85,7 +88,12 @@ export async function registerCertificateRoutes(app: FastifyInstance) {
     let docId: string | undefined;
     let title: string | undefined;
     let reason: string | undefined;
-    let ownerId: string | undefined;
+    let studentId: string | undefined;
+    let studentEmail: string | undefined;
+    let studentName: string | undefined;
+    let kind: string | undefined;
+    let studentRef: string | undefined;
+
     for await (const part of mp) {
       if (part.type === 'file' && part.fieldname === 'pdf') {
         const chunks: Buffer[] = [];
@@ -96,18 +104,35 @@ export async function registerCertificateRoutes(app: FastifyInstance) {
         if (part.fieldname === 'docId') docId = part.value;
         if (part.fieldname === 'title') title = part.value;
         if (part.fieldname === 'reason') reason = part.value;
-        if (part.fieldname === 'ownerId') ownerId = part.value;
+        if (part.fieldname === 'ownerId' || part.fieldname === 'studentId') studentId = part.value;
+        if (part.fieldname === 'studentEmail') studentEmail = part.value;
+        if (part.fieldname === 'studentName') studentName = part.value;
+        if (part.fieldname === 'kind') kind = part.value;
+        if (part.fieldname === 'studentRef') studentRef = part.value;
       }
     }
     if (!fileBuffer) throw new AppError('BAD_REQUEST', 'pdf file is required', 400);
+
+    const metaForIssue: Record<string, any> = {};
+    if (kind) metaForIssue.kind = kind;
+    if (studentRef) metaForIssue.studentRef = studentRef;
+    if (!metaForIssue.kind) metaForIssue.kind = 'certificate';
+    if (!metaForIssue.studentRef) metaForIssue.studentRef = studentId || studentEmail || 'unknown';
+    if (studentId) metaForIssue.studentId = studentId;
+    if (studentEmail) metaForIssue.studentEmail = studentEmail;
+    if (studentName) metaForIssue.studentName = studentName;
+
     const cert = await service.uploadCertificate({
       issuerUserId: (req.user as any).sub,
-      meta: { ownerId },
+      meta: metaForIssue,
       fileBuffer,
       originalName: fileName,
       title,
       docId,
-      reason
+      reason,
+      studentId,
+      studentEmail,
+      studentName
     });
     const issuerUser = await prisma.user.findUnique({ where: { id: (req.user as any).sub } });
     await emailService.notifyIssueSuccess({

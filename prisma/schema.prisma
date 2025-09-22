@@ -42,6 +42,8 @@ model Certificate {
   id             String   @id // docId
   issuerId       String
   issuer         Issuer   @relation(fields: [issuerId], references: [id])
+  studentId      String?
+  student        Student? @relation(fields: [studentId], references: [id])
   // legacy fields (kept for compatibility)
   fileUrl        String
   hash           String
@@ -65,6 +67,7 @@ model Certificate {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   verificationEvents VerificationEvent[]
+  @@index([studentId])
 }
 
 model ChainRecord {
@@ -88,6 +91,8 @@ model VerificationEvent {
   id              String   @id @default(cuid())
   certificateId   String
   certificate     Certificate @relation(fields: [certificateId], references: [id])
+  studentId       String?
+  student         Student? @relation("StudentVerificationEvents", fields: [studentId], references: [id])
   by              String
   result          String   // 'pass' | 'fail' | 'revoked'
   hashMatch       Boolean
@@ -108,4 +113,15 @@ model AuditLog {
   details   String   // JSON string
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id])
+}
+
+model Student {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String
+  name           String?
+  phone          String?
+  createdAt      DateTime @default(now())
+  certificates   Certificate[]
+  verificationEvents VerificationEvent[] @relation("StudentVerificationEvents")
 }

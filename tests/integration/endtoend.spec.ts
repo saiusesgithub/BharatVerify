@@ -1,11 +1,25 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { buildServer } from '../../src/infra/http/server';
 import fs from 'fs';
 import path from 'path';
+import { prisma } from '../../src/infra/db/prismaClient';
+import bcrypt from 'bcryptjs';
 
 describe('end-to-end flows', async () => {
   const app = buildServer();
   await app.ready();
+
+  let studentId = '';
+
+  beforeAll(async () => {
+    const password = bcrypt.hashSync('Student@123', 10);
+    const student = await prisma.student.upsert({
+      where: { email: 'integration.student@example.com' },
+      update: { passwordHash: password, name: 'Integration Student' },
+      create: { email: 'integration.student@example.com', passwordHash: password, name: 'Integration Student' }
+    });
+    studentId = student.id;
+  });
 
   it('admin upload then verifier verifies PASS, tamper causes FAIL', async () => {
     // login as admin
@@ -16,9 +30,10 @@ describe('end-to-end flows', async () => {
     // upload demo file via multipart
     const demoPath = path.join(process.cwd(), 'demo', 'transcript.pdf');
     const data = fs.readFileSync(demoPath);
+    const meta = { kind: 'transcript', studentRef: studentId, studentId };
     const formBoundary = '----vitestboundary';
     const body = Buffer.concat([
-      Buffer.from(`--${formBoundary}\r\n` + `Content-Disposition: form-data; name="meta"\r\n\r\n` + JSON.stringify({ kind: 'transcript', studentRef: 'sample' }) + `\r\n`),
+      Buffer.from(`--${formBoundary}\r\n` + `Content-Disposition: form-data; name="meta"\r\n\r\n` + JSON.stringify(meta) + `\r\n`),
       Buffer.from(`--${formBoundary}\r\n` + `Content-Disposition: form-data; name="file"; filename="transcript.pdf"\r\n` + `Content-Type: application/pdf\r\n\r\n`),
       data,
       Buffer.from(`\r\n--${formBoundary}--\r\n`)
@@ -43,7 +58,6 @@ describe('end-to-end flows', async () => {
     expect((verify.json() as any).status).toBe('PASS');
 
     // Tamper: find stored file and change contents
-    // Storage dir defaults to ./data/files; locate by listing directory and choose latest file (best effort in test)
     const storageDir = process.env.STORAGE_DIR || path.join(process.cwd(), 'data', 'files');
     const files = fs.readdirSync(storageDir).sort();
     const last = files[files.length - 1];
@@ -56,4 +70,3 @@ describe('end-to-end flows', async () => {
     expect(res2.reasons).toContain('HASH_MISMATCH');
   });
 });
-

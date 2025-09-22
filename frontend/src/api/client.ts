@@ -54,7 +54,11 @@ export const api = {
     if (input.docId) form.append('docId', input.docId);
     if (input.title) form.append('title', input.title);
     if (input.reason) form.append('reason', input.reason);
-    if (input.ownerId) form.append('ownerId', input.ownerId);
+    if (input.kind) form.append('kind', input.kind);
+    if (input.studentId) form.append('studentId', input.studentId);
+    if (input.studentEmail) form.append('studentEmail', input.studentEmail);
+    if (input.studentName) form.append('studentName', input.studentName);
+    if (input.studentRef) form.append('studentRef', input.studentRef);
     form.append('pdf', input.file);
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -109,3 +113,4 @@ export const api = {
     return handle(res);
   }
 };
+
