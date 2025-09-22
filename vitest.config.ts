@@ -7,7 +7,7 @@ export default defineConfig({
     coverage: {
       enabled: false
     },
-    setupFiles: []
+    setupFiles: [],
+    exclude: ['frontend/tests/**']
   }
 });
-

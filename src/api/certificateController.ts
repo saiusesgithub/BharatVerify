@@ -5,6 +5,7 @@ import { prisma } from '../infra/db/prismaClient';
 import { getCloudStorageAdapter } from '../adapters/cloudStorageAdapter';
 import { createMockBlockchainAdapter } from '../adapters/blockchainAdapter';
 import { UploadMetaSchema } from '../utils/validation';
+import { emailService } from '../notifications/email';
 import { AppError, ErrorCodes } from '../utils/errors';
 
 export async function registerCertificateRoutes(app: FastifyInstance) {
@@ -16,7 +17,18 @@ export async function registerCertificateRoutes(app: FastifyInstance) {
     preHandler: [app.authenticate, requireRole(['ADMIN'])],
     schema: {
       consumes: ['multipart/form-data'],
-      response: { 200: { type: 'object', properties: { id: { type: 'string' }, hash: { type: 'string' }, signature: { type: 'string' }, downloadUrl: { type: 'string' }, downloadPath: { type: 'string' } } } }
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            hash: { type: 'string' },
+            signature: { type: 'string' },
+            downloadUrl: { type: 'string' },
+            downloadPath: { type: 'string' }
+          }
+        }
+      }
     }
   }, async (req, _reply) => {
     const mp = await req.parts();
@@ -43,7 +55,24 @@ export async function registerCertificateRoutes(app: FastifyInstance) {
       fileBuffer,
       originalName: fileName
     });
-    return { id: cert.id, hash: cert.hash, signature: cert.signature, downloadUrl: cert.r2Key, downloadPath: `/api/admin/certificates/${cert.id}/download` };
+    const issuerUser = await prisma.user.findUnique({ where: { id: (req.user as any).sub } });
+    await emailService.notifyIssueSuccess({
+      docId: cert?.id || 'unknown-doc',
+      title: cert?.title,
+      issuedAt: cert?.issuedAtUnix || Math.floor(Date.now() / 1000),
+      issuerEmail: issuerUser?.email,
+      sha256Hex: cert?.sha256Hex || cert?.hash || '',
+      txHash: cert?.txHash || undefined,
+      explorerUrl: cert?.explorerUrl || undefined
+    });
+
+    return {
+      id: cert.id,
+      hash: cert.hash,
+      signature: cert.signature,
+      downloadUrl: cert.r2Key,
+      downloadPath: `/api/admin/certificates/${cert.id}/download`
+    };
   });
 
   // New issuance endpoint per blockchain integration
@@ -80,6 +109,17 @@ export async function registerCertificateRoutes(app: FastifyInstance) {
       docId,
       reason
     });
+    const issuerUser = await prisma.user.findUnique({ where: { id: (req.user as any).sub } });
+    await emailService.notifyIssueSuccess({
+      docId: cert?.id || docId || 'unknown-doc',
+      title: cert?.title,
+      issuedAt: cert?.issuedAtUnix || Math.floor(Date.now() / 1000),
+      issuerEmail: issuerUser?.email,
+      sha256Hex: cert?.sha256Hex || cert?.hash || '',
+      txHash: cert?.txHash || undefined,
+      explorerUrl: cert?.explorerUrl || undefined
+    });
+
     return {
       docId: cert?.id,
       title: cert?.title,

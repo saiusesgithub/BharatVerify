@@ -29,39 +29,57 @@ export class VerificationService {
     }
 
     const reasons: string[] = [];
-    // Compute or use provided sha256
+    const addReason = (reason: string) => {
+      if (!reasons.includes(reason)) reasons.push(reason);
+    };
+
     let computed = params.sha256Hex;
     if (params.fileBuffer) computed = sha256Bytes(params.fileBuffer);
     if (!computed) {
       const bytes = await this.storage.download(cert.fileUrl);
       computed = sha256Bytes(bytes);
     }
+    const anchoredHash = (cert.sha256Hex || cert.hash || '').toLowerCase();
+    const providedHash = (computed || '').toLowerCase();
+    if (providedHash && anchoredHash && providedHash !== anchoredHash) addReason('HASH_MISMATCH');
 
-    if ((computed || '').toLowerCase() !== (cert.sha256Hex || cert.hash).toLowerCase()) reasons.push('HASH_MISMATCH');
+    let onChainHash: string | null = null;
+    let chainDetails: any = null;
+    let adapterError: string | null = null;
+    try {
+      chainDetails = await chainAdapter.verify(cert.id);
+      if (!chainDetails.found) addReason('CHAIN_MISS');
+      else {
+        onChainHash = chainDetails.onChainHash || null;
+        const normalizedOnChain = (onChainHash || '').toLowerCase();
+        if (providedHash && normalizedOnChain && normalizedOnChain !== providedHash) addReason('HASH_MISMATCH');
+      }
+    } catch (err: any) {
+      adapterError = err?.code || 'CHAIN_ADAPTER_DOWN';
+      addReason(adapterError);
+    }
 
-    // Chain record
-    const on = await chainAdapter.verify(cert.id);
-    if (!on.found) reasons.push('CHAIN_MISS');
-    else if ((on.onChainHash || '').toLowerCase() !== (computed || '').toLowerCase()) reasons.push('HASH_MISMATCH');
-
-    // Signature check
     let issuerVerified = false;
     if (cert.signatureHex && cert.issuerAddress) {
       try {
-        // Use the stored sha256 for signature verification to attest the issued artifact,
-        // independent of the uploaded bytes. Still report HASH_MISMATCH separately.
-        const shaForSignature = (cert.sha256Hex || cert.hash);
-        const sig = await chainAdapter.verifySignature({ docId: cert.id, sha256Hex: shaForSignature, issuedAtUnix: cert.issuedAtUnix || Math.floor(new Date(cert.issuedAt).getTime()/1000), signatureHex: cert.signatureHex, expectedIssuer: cert.issuerAddress });
-        try { logInfo(`[verify] signature: matchesExpected=${sig.matchesExpected}, issuerActive=${sig.issuerActive}`); } catch {}
-        // Optionally require registry active status
+        const shaForSignature = cert.sha256Hex || cert.hash;
+        const sig = await chainAdapter.verifySignature({
+          docId: cert.id,
+          sha256Hex: shaForSignature,
+          issuedAtUnix: cert.issuedAtUnix || Math.floor(new Date(cert.issuedAt).getTime() / 1000),
+          signatureHex: cert.signatureHex,
+          expectedIssuer: cert.issuerAddress
+        });
+        try {
+          logInfo(`[verify] signature: matchesExpected=${sig.matchesExpected}, issuerActive=${sig.issuerActive}`);
+        } catch {}
         issuerVerified = sig.matchesExpected && (config.verifyRequireIssuerActive ? sig.issuerActive : true);
-        if (!issuerVerified) reasons.push('SIG_INVALID');
+        if (!issuerVerified) addReason('SIG_INVALID');
       } catch {
-        reasons.push('SIG_INVALID');
+        addReason('SIG_INVALID');
       }
     }
 
-    // Optional ML analysis (only when an uploaded file is provided and ML is configured)
     let ml: MlVerifyResponse | null = null;
     try {
       const fbSize = params.fileBuffer ? params.fileBuffer.length : 0;
@@ -76,27 +94,30 @@ export class VerificationService {
         } catch {}
       }
     } catch (e: any) {
-      // Swallow ML errors to avoid blocking core verification
       ml = null;
       try {
         logInfo(`[verify] ML error: ${e?.message || String(e)}`);
       } catch {}
     }
 
-    const status = reasons.length === 0 ? 'PASS' : (cert.status === 'revoked' ? 'FAIL' : 'FAIL');
+    const isRevoked = cert.status === 'revoked';
+    if (isRevoked) addReason('REVOKED');
+
+    const status = isRevoked ? 'REVOKED' : reasons.length === 0 ? 'PASS' : 'FAIL';
+    const hashMatch = !reasons.includes('HASH_MISMATCH');
     await this.prisma.verificationResult.create({
-      data: { docId: cert.id, status: status, reasons: JSON.stringify(reasons), verifierUserId: user.id }
+      data: { docId: cert.id, status, reasons: JSON.stringify(reasons), verifierUserId: user.id }
     });
     await this.prisma.verificationEvent.create({
       data: {
         certificateId: cert.id,
         by: user.email,
         result: status.toLowerCase(),
-        hashMatch: !reasons.includes('HASH_MISMATCH'),
+        hashMatch,
         issuerVerified,
         mlSummary: ml ? JSON.stringify(ml) : null,
-        details: JSON.stringify({ reasons, on }),
-        atUnix: Math.floor(Date.now()/1000)
+        details: JSON.stringify({ reasons, chainDetails, adapterError }),
+        atUnix: Math.floor(Date.now() / 1000)
       }
     });
     await this.prisma.auditLog.create({
@@ -110,17 +131,23 @@ export class VerificationService {
       }
     });
 
-    // include compact ML summary in response when available
-    return { status, reasons, ...(ml ? { ml } : {}) } as any;
+    const response: any = {
+      status,
+      reasons,
+      hashMatch,
+      issuerVerified,
+      expectedHash: onChainHash,
+      actualHash: computed || null,
+      adapterError,
+      certificate: {
+        id: cert.id,
+        title: cert.title,
+        issuerId: cert.issuerId,
+        status: cert.status
+      }
+    };
+    if (ml) response.ml = ml;
+    return response;
   }
 }
 
-async function keysOrDb(keys: KeyRegistry, prisma: PrismaClient, issuerId: string): Promise<string> {
-  try {
-    return await keys.getPublicKeyForIssuer(issuerId);
-  } catch {
-    const issuer = await prisma.issuer.findUnique({ where: { id: issuerId } });
-    if (!issuer) throw new Error('Issuer not found');
-    return issuer.publicKeyPem;
-  }
-}

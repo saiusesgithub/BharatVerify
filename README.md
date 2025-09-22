@@ -194,3 +194,8 @@ Optional: verify signature via adapter
 $vs = @{ docId=$docId; sha256Hex=$obj.sha256Hex; issuedAtUnix=$obj.issuedAt; signatureHex=$obj.signatureHex; expectedIssuer=$obj.issuerAddress } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri "http://localhost:8088/verify-signature" -ContentType "application/json" -Body $vs
 ```
+
+
+## Email Notifications
+
+A full setup and troubleshooting guide lives in [docs/EMAIL_NOTIFICATIONS.md](docs/EMAIL_NOTIFICATIONS.md). It covers Gmail SMTP, provider fallbacks (SendGrid/Mailgun/SES), dev testing via /api/dev/notify/test, and the automatic emails triggered on issuance, verification, adapter failures, and revocations.

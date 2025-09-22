@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { prisma } from '../infra/db/prismaClient';
+import { emailService } from '../notifications/email';
 import { requireRole } from '../infra/auth/auth';
 
 export async function registerCertQueryRoutes(app: FastifyInstance) {
@@ -35,9 +36,32 @@ export async function registerCertQueryRoutes(app: FastifyInstance) {
     const body: any = req.body || {};
     const { docId, reason } = body;
     if (!docId) return app.httpErrors.badRequest('docId required');
-    await prisma.certificate.update({ where: { id: docId }, data: { status: 'revoked', reason: reason || 'revoked' } });
-    await prisma.verificationEvent.create({ data: { certificateId: docId, by: (req.user as any).sub, result: 'revoked', hashMatch: false, issuerVerified: false, mlSummary: null, details: JSON.stringify({ reason }), atUnix: Math.floor(Date.now()/1000) } });
+    const updated = await prisma.certificate.update({ where: { id: docId }, data: { status: 'revoked', reason: reason || 'revoked' } });
+    const nowUnix = Math.floor(Date.now() / 1000);
+    await prisma.verificationEvent.create({
+      data: {
+        certificateId: docId,
+        by: (req.user as any).sub,
+        result: 'revoked',
+        hashMatch: false,
+        issuerVerified: false,
+        mlSummary: null,
+        details: JSON.stringify({ reason }),
+        atUnix: nowUnix
+      }
+    });
+    let issuerEmail: string | undefined;
+    if (updated.issuerId) {
+      const issuerUser = await prisma.user.findFirst({ where: { issuerId: updated.issuerId }, orderBy: { createdAt: 'asc' } });
+      issuerEmail = issuerUser?.email || undefined;
+    }
+    await emailService.notifyRevoked({
+      docId: updated.id,
+      title: updated.title,
+      reason: reason || 'revoked',
+      whenUnix: nowUnix,
+      issuerEmail
+    });
     return { ok: true };
   });
 }
-

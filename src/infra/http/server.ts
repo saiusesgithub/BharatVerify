@@ -9,6 +9,7 @@ import { registerCertificateRoutes } from '../../api/certificateController';
 import { registerVerificationRoutes } from '../../api/verificationController';
 import { registerAuditRoutes } from '../../api/auditController';
 import { registerCertQueryRoutes } from '../../api/certQueryController';
+import { registerDevNotifyRoutes } from '../../api/devNotifyController';
 import { AppError } from '../../utils/errors';
 
 export function buildServer() {
@@ -37,6 +38,9 @@ export function buildServer() {
   app.register(async (r) => registerVerificationRoutes(r), { prefix: '/api/verifications' });
   app.register(async (r) => registerAuditRoutes(r), { prefix: '/api' });
   app.register(async (r) => registerCertQueryRoutes(r), { prefix: '/api' });
+  if ((process.env.NODE_ENV || 'development') !== 'production') {
+    app.register(async (r) => registerDevNotifyRoutes(r), { prefix: '/api/dev' });
+  }
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof AppError) {
@@ -49,3 +53,5 @@ export function buildServer() {
 
   return app;
 }
+
+
